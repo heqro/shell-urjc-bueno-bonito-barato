@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/heqro/CLionProjects/motherAPOSTROFEs-Shell/Proyecto/main.c
+stdio.h
+-
+parser.h
+/home/heqro/CLionProjects/motherAPOSTROFEs-Shell/Proyecto/parser.h
+
+/home/heqro/CLionProjects/motherAPOSTROFEs-Shell/Proyecto/parser.h
+
