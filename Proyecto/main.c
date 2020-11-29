@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include "parser.h"
 int main() {
-    printf("Hello, World!\n");
+    printf("HOLA, World!\n");
     return 0;
 }
