@@ -66,22 +66,17 @@ int main() {
                     crearUltimo(pipe_comandos, line);
                 }
                 pause(); // esperar hasta que el hijo haya sido creado
-                // Estamos en condiciones de ejecutar el comando
-
-                break;
+                if(strcmp(line->commands[i-1].filename, "cd") == 0){
+                    // si algún comando es cd, abortar
+                    exit(1);
+                }
+                // Ejecutar el comando pedido
+                for (j = 0; j < line->commands[i-1].argc; j++){
+                    execvp(line->commands[i-1].filename, &line->commands[i].argv[j]);
+                }
+                //break;
             }
 
-            // El padre sale del bucle y se pone a la espera de que se hayan creado los hijos
-            // El hijo sigue creando un hijo (o no)
-            printf("orden %d (%s):\n", i, line->commands[i].filename);
-            // ir haciendo forks
-            if(strcmp(line->commands[i-1].filename, "cd") == 0){
-                // si algún comando es cd, abortar
-            }
-            // Ejecutar el comando pedido
-            for (j = 0; j < line->commands[i-1].argc; j++){
-                execvp(line->commands[i-1].filename, &line->commands[i].argv[j]);
-            }
 
         }
         printf("msh> ");
