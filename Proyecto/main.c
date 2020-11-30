@@ -5,20 +5,24 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <fcntl.h>
-
+#include <sys/wait.h>
 void crearPrimero(int pipe[2], tline* line){
     close(pipe[0]);//nunca utilizaremos el pipe de entrada
-    if(line->redirect_input){//hay redirección de salida
-        close(STDIN_FILENO);
+    close(STDIN_FILENO);
+    if(line->redirect_input){//hay redirección de entrada
         pipe[0] = open(line->redirect_input, O_RDONLY);
+    }else{//Escuchar por stdin
+        dup(pipe[0]);
     }
 }
 
 void crearUltimo(int pipe[2], tline* line){
     close(pipe[1]); // Nunca utilizaremos el pipe de salida, por lo que lo cerramos
+    close(STDOUT_FILENO);
     if(line->redirect_output) { //hay redirección de salida
-        close(STDOUT_FILENO);
         pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
+    } else { //Escuchar por stdout
+        dup(pipe[1]);
     }
 }
 
@@ -47,8 +51,12 @@ int main() {
         line = tokenize(buf);
         if (line==NULL) {
             continue;
+        } else {
+            pid = fork(); // Vamos a tener que ejecutar al menos un mandato
+            if(!esHijo(pid)){
+                continue; // El padre no hace nada más
+            }
         }
-        //Siempre va a haber un proceso inicial
         pipe(pipe_comandos); // Creamos pipe para conectar procesos
         for (i = 1; i <= line->ncommands; i++) {
             pid = fork(); // Crear un proceso para ejecutar el comando i-ésimo
@@ -58,26 +66,28 @@ int main() {
                     exit(0);
                 }
                 kill(getppid(),SIGUSR1); // que continúe el padre
-            }else{ // el padre sale del bucle
-                if(i == 1){ //¿Es el primer mandato?
+                pause();
+            }else {
+                if (i == 1) { //¿Es el primer mandato?
                     crearPrimero(pipe_comandos, line);
                 }
-                if(i == line->ncommands){ // Somos el último comando
+                if (i == line->ncommands) { // Somos el último comando
                     crearUltimo(pipe_comandos, line);
                 }
                 pause(); // esperar hasta que el hijo haya sido creado
-                if(strcmp(line->commands[i-1].filename, "cd") == 0){
+                if (strcmp(line->commands[i - 1].filename, "cd") == 0) {
                     // si algún comando es cd, abortar
                     exit(1);
                 }
                 // Ejecutar el comando pedido
-                for (j = 0; j < line->commands[i-1].argc; j++){
-                    execvp(line->commands[i-1].filename, &line->commands[i].argv[j]);
+                for (j = 0; j < line->commands[i - 1].argc; j++) {
+                    execvp(line->commands[i - 1].filename, &line->commands[i].argv[j]);
                 }
-                //break;
+                kill(getpid(), SIGUSR1); // mandar señal al hijo de que hemos acabado nuestra ejecución
+                wait(NULL); // esperar a que acabe la ejecución del hijo para terminar en cascada
+                //break; // el padre abandona el bucle, porque ya ha terminado su tarea
+                exit(0);
             }
-
-
         }
         printf("msh> ");
     }
