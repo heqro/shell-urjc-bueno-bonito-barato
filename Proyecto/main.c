@@ -52,9 +52,11 @@ int main() {
         if (line==NULL) {
             continue;
         } else {
-            pid = fork(); // Vamos a tener que ejecutar al menos un mandato
-            if(!esHijo(pid)){
-                continue; // El padre no hace nada más
+            if(line->background){
+                pid = fork(); // Vamos a tener que ejecutar al menos un mandato
+                if(!esHijo(pid)){
+                    continue; // El padre no hace nada más
+                }
             }
         }
         pipe(pipe_comandos); // Creamos pipe para conectar procesos
@@ -86,7 +88,11 @@ int main() {
                 kill(getpid(), SIGUSR1); // mandar señal al hijo de que hemos acabado nuestra ejecución
                 wait(NULL); // esperar a que acabe la ejecución del hijo para terminar en cascada
                 //break; // el padre abandona el bucle, porque ya ha terminado su tarea
-                exit(0);
+                if(line->background){
+                    exit(0);
+                } else {
+                    break;
+                }
             }
         }
         printf("msh> ");
