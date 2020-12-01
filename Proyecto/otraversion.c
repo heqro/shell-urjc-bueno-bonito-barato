@@ -7,6 +7,8 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+
+    
 //Lista para manejar los bg
 typedef struct nodo //nombre estructura
 {
@@ -115,9 +117,9 @@ int cambiarDirectorio(int nArgs, char** lArgs){
 
 
 void crearPrimero(int pipe[2], tline* line){
+    
     close(pipe[1]);
-    close(STDOUT_FILENO);
-    dup(pipe[1]);
+    dup2(pipe[1],STDOUT_FILENO);
     
     // comprobación de error
     if(line->redirect_input){//hay redirección de entrada
@@ -128,13 +130,18 @@ void crearPrimero(int pipe[2], tline* line){
     
 }
 
-void crearUltimo(int pipe[2], tline* line){
+void crearUltimo(int pipe[2], tline* line,int stdoutAux,int stdinAux){
     close(pipe[1]); // Nunca utilizaremos el pipe de salida, por lo que lo cerramos
-    close(STDOUT_FILENO);
+    
     if(line->redirect_output) { //hay redirección de salida
-        pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
+        //pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
+        dup2(pipe[1],open(line->redirect_output, O_CREAT, O_WRONLY));
+        
     } else { //Escuchar por stdout
-        dup(pipe[1]);
+		dup2(stdoutAux,1);
+        close(stdoutAux);
+        dup2(stdinAux,0);
+        close(stdinAux);
     }
 }
 
@@ -158,10 +165,26 @@ int comprobarComando(char* comando){
 }
 
 void ejecutarComando(int i, tline* line){
-    for (int j = 0; j<line->commands[i-1].argc; j++) {
-        char* const* argumentos = &line->commands[i-1].argv[j];
-        execvp(line->commands[i-1].filename, argumentos);
-    }
+	int status;
+    pid_t pidaux;
+    pidaux=fork();
+    if(esHijo(pidaux)){
+		char* const* argumentos = line->commands[i-1].argv;
+		execvp(argumentos[0], argumentos);
+		
+		
+	}else{
+		wait(&status);
+		if(WIFEXITED(status)!=0){
+			//Error
+			fputs("Error1\n",stderr);
+			if(WEXITSTATUS(status)!=0){
+				fputs("Error2\n",stderr);
+			}
+		}
+		
+	}				
+		
 }
 
 int main() {
@@ -172,12 +195,14 @@ int main() {
     tline* line;
     int pipe_ph[2];
     int pipe_hp[2];
-
-    int stdoutAux = dup(1);
-    
+	
+	int const stdoutAux = dup(1); //guardamos stdout actual
+    int const stdinAux = dup(0);	//guardamos stdin actual
+     
 
     printf("msh> ");
     while(fgets(buf, 1024, stdin)){
+		
         line = tokenize(buf);
         if (line==NULL) {
             continue;
@@ -205,17 +230,17 @@ int main() {
             if (esHijo(pid)){//Hijo
                 if(i == 2){ // primera iteración del bucle cerrado
                     // Hacer que el stdin del hijo pase a ser ph[0]
-                    close(STDIN_FILENO);
-                    dup(pipe_ph[0]);
+                    dup2(pipe_ph[0],STDIN_FILENO);
                     // Hacer que el stdout del hijo lo escribimos en hp[1]
                     close(pipe_hp[1]);
-                    close(STDOUT_FILENO);
-                    dup(pipe_hp[1]);
+                    dup2(pipe_hp[1],STDOUT_FILENO);
                 }
                 if (i == line->ncommands){ // Restaurar STDOUT para poder escribir en él
+                    //crearUltimo(pipe_hp,line);
                     // Restaurar STDOUT
                     dup2(stdoutAux, 1);
                     close(stdoutAux);
+                    
                     // Cerrar pipes, hemos acabado
                 }
                 if(i % 2 == 0){ // el hijo ejecuta comandos de i par
@@ -223,22 +248,28 @@ int main() {
                 }
             } else {//Padre
                 if (i == 1){//leer de stdin o bien redirect-input
+                    
                     crearPrimero(pipe_ph, line);
+                    
+					
                 }
                 if (i == 2){ // primera iteración del bucle "cerrado"
-                    close(pipe_hp[0]);
-                    close(STDIN_FILENO);
-                    dup(pipe_hp[0]);
-                    close(STDOUT_FILENO);
-                    dup(pipe_ph[1]);
+					close(pipe_hp[0]);
+                    dup2(pipe_hp[0],STDIN_FILENO);
+                    dup2(pipe_ph[1],STDOUT_FILENO);
                 }
                 if (i == line->ncommands){ // último mandato: restaurar stdout o redirect-output
-                    dup2(stdoutAux, 1);
-                    close(stdoutAux);
+                    
+                    //dup2(stdoutAux,1);
+                    //close(stdoutAux);
+                    //dup2(stdinAux,0);
+                    //close(stdinAux);
+					crearUltimo(pipe_hp,line,stdoutAux,stdinAux);
                 }
                 
                 if(i % 2 == 1){ // el padre ejecuta comandos de i impar
                     ejecutarComando(i, line);
+                    
                 }
             }
             if(esHijo(pid)){ // Hijo cierra descriptores abiertos
@@ -254,6 +285,7 @@ int main() {
             }
             // Suicidio colectivo
         }
+        wait(NULL);
         printf("msh> ");
     }
     return 0;
