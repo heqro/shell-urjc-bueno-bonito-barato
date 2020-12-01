@@ -144,10 +144,17 @@ int main() {
                     }
                 }
             }
-            // Si es hijo, cerrar sus descriptores
-            // HIJO: debe cerrar ph[0], hp[1]
-            // Si es padre, cerrar sus descriptores
-            // PADRE: debe cerrar hp[0], ph[1]
+            if(esHijo(pid)){ // Hijo cierra descriptores abiertos
+                close(pipe_hp[1]);
+                close(pipe_ph[0]);
+                exit(0);
+            }else{ // padre cierra descriptores abiertos
+                close(pipe_hp[0]);
+                close(pipe_ph[1]);
+                if(line->background){
+                    pause();
+                }
+            }
             // Suicidio colectivo
         }
         printf("msh> ");
