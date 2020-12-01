@@ -84,6 +84,32 @@ int borrarElemento(lista L, int nelemento){
 
 }
 
+int cambiarDirectorio(int nArgs, char** lArgs){
+    char* nuevoDir = NULL;
+    if (nArgs == 1) { // ir a home
+        nuevoDir = getenv("HOME");
+    } else {
+        if (nArgs > 2) {
+            // número incorrecto de argumentos
+            // lanzar mensaje
+            exit(1);
+        }
+        if (*(lArgs[1]) != '/'){//ruta relativa
+            nuevoDir = getcwd(nuevoDir, 0);
+            char* barra = malloc(sizeof(char));
+            *barra = '/';
+            nuevoDir = strcat(nuevoDir, barra);
+            nuevoDir = strcat(nuevoDir, lArgs[1]);
+        } else { // ruta absoluta
+            nuevoDir = lArgs[1];
+        }
+    }
+    chdir(nuevoDir);
+    printf("%s", nuevoDir);
+    return 0;
+}
+
+
 void crearPrimero(int pipe[2], tline* line){
     close(pipe[1]);
     close(STDOUT_FILENO);
