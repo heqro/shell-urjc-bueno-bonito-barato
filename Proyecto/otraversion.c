@@ -129,8 +129,8 @@ int comprobarComando(char* comando){
 
 void ejecutarComando(int i, tline* line){
     for (int j = 0; j<line->commands[i-1].argc; j++) {
-                execvp(line->commands[i-1].filename, line->commands[i-1].argv[j]);
-    
+        char* const* argumentos = &line->commands[i-1].argv[j];
+        execvp(line->commands[i-1].filename, argumentos);
     }
 }
 
