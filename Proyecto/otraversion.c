@@ -8,46 +8,50 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 //Lista para manejar los bg
-typedef struct nodo
+typedef struct nodo //nombre estructura
 {
 	pid_t pid;
 	int indice;
 	struct nodo *sig;
-} nodoL;
+} nodoL; //tipo dato estructura
 
-// Alias para lista
 typedef nodoL *lista;
-void nuevaLista(lista *L){
+
+void nuevaLista(lista L){
 	L = NULL;
 }
-void insertarDelante (lista L, pid_t n){
-	lista aux = malloc(sizeof(nodoL)); //Crear un nuevo nodo.
+void insertarDelante (lista *L, pid_t n){
+	lista aux;
+	aux = malloc(sizeof(nodoL)); //Crear un nuevo nodo.
 	aux -> pid = n; //Asignar el valor al nodo.
-	aux -> sig = L; //Apuntar el nodo al nodo que apuntaba la lista.
-	if (L==NULL){
+	aux -> sig = *L; //Apuntar el nodo al nodo que apuntaba la lista.
+	if (*L==NULL){
 		aux->indice = 0;
 	}else{
-		L->indice = (aux->indice) + 1;
+		(*L)->indice = aux->indice;
 	}
-	L=aux; //Hacer que la lista apunte al nodo nuevo.
+	*L=aux; //Hacer que la lista apunte al nodo nuevo.
 	
 	
 }/* inserta el valor n al frente de la lista */
 
-int mostrar(nodoL* L){
+int mostrar(lista L){
 		//Debera mostrar los valores
-		printf("Para que no de error");
+		while(L != NULL){ //Mientras cabeza no sea NULL
+        printf("%i\n",L->pid); //Imprimimos el valor del nodo
+        L = L->sig; //Pasamos al siguiente nodo
+    }
 		return 0;
 }
-int borrarElemento(lista L, int nelemento){
+int borrarElemento(lista *L, int nelemento){
 	
 	int i=0;
 	int j=0;
 	lista L4,L2,L0;
-	lista L1=L;
-	if(L==NULL) {return 0;}
+	lista L1=*L;
+	if(*L==NULL) {return 0;}
 	if(nelemento==0){
-		L=L->sig;
+		*L=(*L)->sig;
 		free(L1);
 		return 0;
 	}
@@ -65,9 +69,9 @@ int borrarElemento(lista L, int nelemento){
 	free(L1);
 	
 	//Tenemos que recontar los indices
-	L4=L;
-	if(L==NULL) {
-		L->indice=0;
+	L4=*L;
+	if(*L==NULL) {
+		(*L)->indice=0;
 		return 0;
 	}
 	
