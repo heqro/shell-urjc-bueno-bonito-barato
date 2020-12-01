@@ -7,7 +7,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/wait.h>
-
+#include <errno.h>
     
 //Lista para manejar los bg
 typedef struct nodo //nombre estructura
@@ -171,15 +171,13 @@ void ejecutarComando(int i, tline* line){
     if(esHijo(pidaux)){
 		char* const* argumentos = line->commands[i-1].argv;
 		execvp(argumentos[0], argumentos);
-		
-		
+        fprintf(stderr,"Error al lanzar el comando. %s\n",strerror(errno));
+        exit(1);
 	}else{
 		wait(&status);
 		if(WIFEXITED(status)!=0){
-			//Error
-			fputs("Error1\n",stderr);
 			if(WEXITSTATUS(status)!=0){
-				fputs("Error2\n",stderr);
+				fprintf(stderr,"Error - el comando no se ejecutó correctamente. %s\n",strerror(errno));
 			}
 		}
 		
@@ -202,7 +200,6 @@ int main() {
 
     printf("msh> ");
     while(fgets(buf, 1024, stdin)){
-		
         line = tokenize(buf);
         if (line==NULL) {
             continue;
