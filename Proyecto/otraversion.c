@@ -42,6 +42,21 @@ void errorFork(pid_t pid){
     }
 }
 
+int comprobarComando(char* comando){
+    int esCd, esFg, esJobs;
+    esCd = strcmp(comando, "cd");
+    esFg = strcmp(comando, "fg");
+    esJobs = strcmp(comando, "jobs");
+    return esCd || esFg || esJobs;
+}
+
+void ejecutarComando(int i, tline* line){
+    for (int j = 0; j<line->commands[i-1].argc; j++) {
+                execvp(line->commands[i-1].filename, line->commands[i-1].argv[j]);
+    
+    }
+}
+
 int main() {
     // Definición de variables
     char buf [1024];
@@ -67,40 +82,21 @@ int main() {
                 }
             }
         }
-        
-        pipe(pipe_ph); // Creamos pipe para conectar procesos
-        pipe(pipe_hp);
-        
+        pipe(pipe_ph); // Creamos pipe en sentido padre -> hijo
+        pipe(pipe_hp); // Creamos pipe en sentido hijo -> padre
         pid = fork();
-        if (esHijo(pid)){//Hijo
+        errorFork(pid); // ¿Ha habido algún error?
+        if (esHijo(pid)){//Hijo cierra sus descriptores correspondientes
 			close(pipe_hp[0]);
             close(pipe_ph[1]);
-            
-            
-            
-            // Caso General
-//             close(STDIN_FILENO);
-//             dup(pipe_ph[0]);
-//             close(STDOUT_FILENO);
-//             dup(pipe_hp[1]);
-		} else{//Padre
+		} else{//Padre cierra sus descriptores correspondientes
             close(pipe_hp[1]);
             close(pipe_ph[0]);
-            
-            // Caso general
-//             close(STDIN_FILENO);
-//             dup(pipe_hp[0]);
-//             close(STDOUT_FILENO);
-//             dup(pipe_ph[1]);
 		}
 		
-		
-		
-		
-        errorFork(pid);
-        for (i = 1; i <= line->ncommands; i++) {       
+        for (i = 1; i <= line->ncommands; i++) { // Ejecución de la línea
             if (esHijo(pid)){//Hijo
-                if(i == 2){
+                if(i == 2){ // primera iteración del bucle cerrado
                     // Hacer que el stdin del hijo pase a ser ph[0]
                     close(STDIN_FILENO);
                     dup(pipe_ph[0]);
@@ -114,34 +110,28 @@ int main() {
                     dup2(stdoutAux, 1);
                     close(stdoutAux);
                     // Cerrar pipes, hemos acabado
-                    
                 }
-                if(i % 2 == 0){
-                    // ejecutarComando(i, line);
+                if(i % 2 == 0){ // el hijo ejecuta comandos de i par
+                    ejecutarComando(i, line);
                 }
-                    
             } else {//Padre
-                if (i == 1){//leer stdin - redirect_input
+                if (i == 1){//leer de stdin o bien redirect-input
                     crearPrimero(pipe_ph, line);
                 }
-                if (i == 2){
+                if (i == 2){ // primera iteración del bucle "cerrado"
                     close(pipe_hp[0]);
                     close(STDIN_FILENO);
                     dup(pipe_hp[0]);
                     close(STDOUT_FILENO);
                     dup(pipe_ph[1]);
                 }
-                if (i == line->ncommands){ // Restaurar STDOUT para poder escribir en él
+                if (i == line->ncommands){ // último mandato: restaurar stdout o redirect-output
                     dup2(stdoutAux, 1);
                     close(stdoutAux);
                 }
                 
-                if(i % 2 == 1){
-                    //Ejecutar comando
-                    //ejecutarComando(i, line);
-                    for (j=0; j<line->commands[i-1].argc; j++) {
-                        printf("  argumento %d: %s\n", j, line->commands[i-1].argv[j]);
-                    }
+                if(i % 2 == 1){ // el padre ejecuta comandos de i impar
+                    ejecutarComando(i, line);
                 }
             }
             if(esHijo(pid)){ // Hijo cierra descriptores abiertos
