@@ -7,6 +7,83 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+//Lista para manejar los bg
+typedef struct nodo
+{
+	pid_t pid;
+	int indice;
+	struct nodo *sig;
+} nodoL;
+
+// Alias para lista
+typedef nodoL *lista;
+void nuevaLista(lista *L){
+	L = NULL;
+}
+void insertarDelante (lista L, pid_t n){
+	lista aux = malloc(sizeof(nodoL)); //Crear un nuevo nodo.
+	aux -> pid = n; //Asignar el valor al nodo.
+	aux -> sig = L; //Apuntar el nodo al nodo que apuntaba la lista.
+	if (L==NULL){
+		aux->indice = 0;
+	}else{
+		L->indice = (aux->indice) + 1;
+	}
+	L=aux; //Hacer que la lista apunte al nodo nuevo.
+	
+	
+}/* inserta el valor n al frente de la lista */
+
+int mostrar(nodoL* L){
+		//Debera mostrar los valores
+		printf("Para que no de error");
+		return 0;
+}
+int borrarElemento(lista L, int nelemento){
+	
+	int i=0;
+	int j=0;
+	lista L4,L2,L0;
+	lista L1=L;
+	if(L==NULL) {return 0;}
+	if(nelemento==0){
+		L=L->sig;
+		free(L1);
+		return 0;
+	}
+	while(i!=nelemento){
+		L0=L1;
+		L1=L1->sig;
+		i=i+1;
+	}
+	
+	//L0 antes de L1 y L2 despues de L1, L1 es el nodo a borrar
+	//Si L1 es el ultimo nodo L2->sig sera null luego no hay mas casos que distinguir
+	
+	L2=L1->sig;
+	L0->sig=L2;
+	free(L1);
+	
+	//Tenemos que recontar los indices
+	L4=L;
+	if(L==NULL) {
+		L->indice=0;
+		return 0;
+	}
+	
+	while(L4!=NULL){
+		L4->indice=j;
+		L4=L4->sig;
+		j=j+1;
+	}
+	
+	
+	return 0;
+	
+
+
+}
+
 void crearPrimero(int pipe[2], tline* line){
     close(pipe[1]);
     close(STDOUT_FILENO);
