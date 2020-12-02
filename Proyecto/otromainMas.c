@@ -169,6 +169,9 @@ void ejecutarComando(int i, tline* line){
 	int status;
     pid_t pidaux;
     pidaux=fork();
+    if(pidaux < 0){
+        fprintf(stderr, "Fallo de fork().\n", strerror(errno));
+    }
     if(esHijo(pidaux)){
 		char* const* argumentos = line->commands[i-1].argv;
 		execvp(argumentos[0], argumentos);
@@ -182,7 +185,7 @@ void ejecutarComando(int i, tline* line){
 			}
 		}
 	}				
-		
+	fflush(stdout);	
 }
 
 void manejadorSigUsr1(){
@@ -210,7 +213,7 @@ int main() {
         if (line==NULL) {
             continue;
         } else {
-            if(line->background){
+            if(line->background == 1){
                 pid = fork(); // Vamos a tener que ejecutar al menos un mandato
                 if(!esHijo(pid)){
                     continue; // El padre no hace nada más
@@ -229,19 +232,28 @@ int main() {
                     close(pipe_ph[1]);
                     // duplicar pipe_ph[0] en stdin
                     dup2(pipe_ph[0], STDIN_FILENO);
+                    //duplicar pipe_hp[1] en stdout
+                    dup2(pipe_hp[1], STDOUT_FILENO);
                     // mandar señal al padre de que todo está listo
                     kill(getppid(), SIGUSR1);
                 }
-                if(i == line->ncommands){
-                    // si es el último mandato, restaurar stdout o bien hacer redirección de salida
+                if(i == line->ncommands && i % 2 == 0){//si es el último mandato
+                    if(line->redirect_output != NULL){ // redirección de salida
+                        
+                    } else { // restaurar stdout
+                        dup2(stdoutAux, STDOUT_FILENO);
+                        fprintf(stdout, "HIJO - Stdout restaurado!\n");
+                        fflush(stdout);
+                    }
                 }
-                
                 if(i % 2 == 0){
                     ejecutarComando(i, line);
                 }
             } else {//Padre
                 if(i == 1){
-                    // Redireccionar stdin si fuera necesario
+                    if(line->redirect_input != NULL){ // es necesario redireccionar stdin
+                        
+                    }
                     // Cerrar descriptores sin utilizar
                     close(pipe_hp[1]);
                     close(pipe_ph[0]);
@@ -250,9 +262,13 @@ int main() {
                     // Esperar al hijo
                     pause();
                 }
-                if(i == line->ncommands){
-                    //Si es el último mandato, restaurar stdout o bien hacer redirección de salida
-                    
+                if(i == line->ncommands && i % 2 == 1){// si es el último mandato
+                    if(line->redirect_output != NULL){ // redirección de salida
+                        
+                    } else { // restaurar stdout
+                        dup2(stdoutAux, STDOUT_FILENO);
+                        fprintf(stdout,"PADRE - %d - Stdout restaurado!\n",i);
+                    }
                 }
                 if(i % 2 == 1){//iteración impar -> ejecutar mandato
                     ejecutarComando(i, line);
