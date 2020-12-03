@@ -182,6 +182,51 @@ void manejador(int sig){
 	}
     
 }
+void redirStdin(char* inp){
+	int dirAux;
+	
+	if (inp!=NULL){
+		dirAux = open(inp,O_RDONLY);
+		if(dirAux < 0){
+			fprintf(stderr,"Fichero : Error. %s\n",strerror(errno));
+			exit(1);
+		}else{
+			dup2(dirAux,STDIN_FILENO);
+			close(dirAux);
+		}
+		
+	}
+}
+void redirStdout(char* output){
+	int dirAux;
+	
+	if (output!=NULL){
+		dirAux = open(output,O_WRONLY | O_CREAT);
+		if(dirAux < 0){
+			fprintf(stderr,"Fichero : Error. %s\n",strerror(errno));
+			exit(1);
+		}else{
+			dup2(dirAux,STDOUT_FILENO);
+			close(dirAux);
+		}
+		
+	}
+}
+void redirStderr(char* outerror){
+	int dirAux;
+	
+	if (outerror!=NULL){
+		dirAux = open(outerror,O_WRONLY| O_CREAT);
+		if(dirAux < 0){
+			fprintf(stderr,"Fichero : Error. %s\n",strerror(errno));
+			exit(1);
+		}else{
+			dup2(dirAux,STDERR_FILENO);
+			close(dirAux);
+		}
+		
+	}
+}
 
 int main() {
     // Definición de variables
@@ -205,26 +250,41 @@ int main() {
 		
 		
         line = tokenize(buf);
+        
         if (line==NULL) {
             continue;
         } else {
 			pid = fork();
 			if (!esHijo(pid)){
 				wait(&status);
-				if(status==2){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
+				if(WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT ){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
 				continue;
 			}else{
-				signal(SIGQUIT,SIG_DFL);
-				signal(SIGINT,SIG_DFL);
+				//Redireccionamientos
+				
+				redirStdin(line->redirect_input); //pasamos la redireccion de entrada 
+				redirStdout(line->redirect_output); //pasamos la redireccion de salida 
+				redirStderr(line->redirect_error); //pasamos la redireccion de error 
+					
 			}
-        }
+         }
+        
+        
         
         if(line->ncommands == 1){
             pid = fork();
             if(esHijo(pid)){
+				
+				signal(SIGQUIT,SIG_DFL);
+				signal(SIGINT,SIG_DFL);
+			
                 ejecutarComando(0,line);
+                
             }else{
-                wait(NULL);
+                wait(&status);
+                if (WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT){
+					exit(status); //devolvemos el status de su hijo
+				}
             }
         } else {
             pipes = malloc((line->ncommands - 1)*sizeof(int*));//inicializamos n-1 pipes
@@ -236,6 +296,10 @@ int main() {
                 pid = fork();
                 errorFork(pid);
                 if(esHijo(pid)){ // Hijo
+					
+					signal(SIGQUIT,SIG_DFL);
+					signal(SIGINT,SIG_DFL);
+			
                     if (i == 0){ // si es la primera iteración
                         close(pipes[0][0]);
                         dup2(pipes[0][1],STDOUT_FILENO);
@@ -260,13 +324,19 @@ int main() {
                     if(i != line->ncommands - 1){
                         close(pipes[i][1]); //cerramos el descriptor para que no se bloqueen las lecturas del hijo siguiente
                     }
-                    wait(NULL); // esperar al i-ésimo hijo
-                    
+                    wait(&status); // esperar al i-ésimo hijo
+                    if (WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT){
+						break;
+					}
                     
                 }
             }
             // después del for, padre cierra descriptores abiertos
         }
+        for(i = 0; i < line->ncommands - 1; i++){              
+			free(pipes[i]); // para cada pipe inicializamos dos enteros
+        }
+        free(pipes);
         
         //wait(NULL);
        // printf("msh> ");
@@ -280,5 +350,8 @@ int main() {
 		signal(SIGQUIT,SIG_IGN);
  
     }
+    
+    
+    
     return 0;
 }
