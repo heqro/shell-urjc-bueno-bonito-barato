@@ -233,6 +233,7 @@ int main() {
                     // duplicar pipe_ph[0] en stdin
                     dup2(pipe_ph[0], STDIN_FILENO);
                     close(pipe_ph[0]);
+                    
                     //duplicar pipe_hp[1] en stdout
                     dup2(pipe_hp[1], STDOUT_FILENO);
                     close(pipe_hp[1]);
@@ -244,12 +245,16 @@ int main() {
                         
                     } else { // restaurar stdout
                         dup2(stdoutAux, STDOUT_FILENO);
-                        //fprintf(stdout, "HIJO - Stdout restaurado!\n");
+                        fprintf(stderr, "HIJO - Stdout restaurado!\n");
                         fflush(stdout);
                     }
                 }
                 if(i % 2 == 0){
+					fflush(stdin);
                     ejecutarComando(i, line);
+                    fflush(stdout);
+                    
+                        fprintf(stderr, "HIJO - Hice exec en iteracion : %i\n",i);
                 }
             } else {//Padre
                 if(i == 1){
@@ -273,8 +278,11 @@ int main() {
                     }
                 }
                 if(i % 2 == 1){//iteración impar -> ejecutar mandato
-                    ejecutarComando(i, line);
                     fflush(stdin);
+                    ejecutarComando(i, line);
+					fflush(stdout);
+					
+                        fprintf(stderr, "PADRE - Hice exec en iteracion : %i\n",i);
                 }
                 if(i == 1){//duplicar pipe_hp[0] en stdin
                     dup2(pipe_hp[0], STDIN_FILENO);

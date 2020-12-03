@@ -171,7 +171,7 @@ void ejecutarComando(int i, tline* line){
     char* const* argumentos = line->commands[i].argv;	
     execvp(argumentos[0], argumentos);
     fflush(stdout);
-    fprintf(stderr,"Error al lanzar el comando. %s\n",strerror(errno));
+	fprintf(stderr,"Error al lanzar el comando. %s\n",strerror(errno));
     exit(1);
 }
 
@@ -239,7 +239,7 @@ int main() {
                     }
                     if (i != 0 && i != (line->ncommands-1)){
                         // si no es ni la primera ni la última iteración
-                        close(pipes[i-1][1]);
+                        
                         close(pipes[i][0]);
                         dup2(pipes[i-1][0], STDIN_FILENO);
                         close(pipes[i-1][0]);
@@ -247,22 +247,17 @@ int main() {
                         close(pipes[i][1]);
                     }
                     if (i!= 0 && i == (line-> ncommands - 1)){
-                        close(pipes[i-1][1]);
+                        
                         dup2(pipes[i-1][0],STDIN_FILENO);
                         close(pipes[i-1][0]);
                     }
                     ejecutarComando(i, line);
                 } else { // Padre
                     if(i != line->ncommands - 1){
-                        close(pipes[i][1]);
+                        close(pipes[i][1]); //cerramos el descriptor para que no se bloqueen las lecturas del hijo siguiente
                     }
-                    wait(&status); // esperar al i-ésimo hijo
-                    if(WIFEXITED(status)!=0){
-                        if(WEXITSTATUS(status)!=0){
-                            fprintf(stderr,"Error - el comando no se ejecutó correctamente. %s\n",strerror(errno));
-                            break;
-                        }
-                    }
+                    wait(NULL); // esperar al i-ésimo hijo
+                    
                     
                 }
             }

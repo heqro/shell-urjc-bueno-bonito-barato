@@ -170,12 +170,16 @@ void ejecutarComando(int i, tline* line){
 	int status;
     char* const* argumentos = line->commands[i].argv;	
     execvp(argumentos[0], argumentos);
-    fprintf(stderr,"Error al lanzar el comando. %s\n",strerror(errno));
+    fflush(stdout);
+	fprintf(stderr,"%s: No se encuentra el mandato\n",argumentos[0]);
     exit(1);
 }
 
 
-void manejadorSigUsr1(){
+void manejador(int sig){
+	if(sig == SIGINT){
+		kill(getpid(),SIGKILL);
+	}
     
 }
 
@@ -193,31 +197,35 @@ int main() {
     int **pipes;
     
     //signal(SIGUSR1,manejadorSigUsr1);
-    
-    printf("msh> ");
-    while(fgets(buf, 1024, stdin)){
+    signal(SIGINT,SIG_IGN);
+	signal(SIGQUIT,SIG_IGN);
+	
+    //printf("msh> ");
+    while(printf("msh> ") && fgets(buf, 1024, stdin)){
+		
+		
         line = tokenize(buf);
         if (line==NULL) {
             continue;
         } else {
-            if(line->background){
-                pid = fork(); // Vamos a tener que ejecutar al menos un mandato
-                errorFork(pid); // ¿Ha habido algún error?
-                if(!esHijo(pid)){
-                    continue; // El padre no hace nada más
-                }
-            }
+			pid = fork();
+			if (!esHijo(pid)){
+				wait(&status);
+				if(status==2){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
+				continue;
+			}else{
+				signal(SIGQUIT,SIG_DFL);
+				signal(SIGINT,SIG_DFL);
+			}
         }
         
         if(line->ncommands == 1){
             pid = fork();
             if(esHijo(pid)){
                 ejecutarComando(0,line);
-                fflush(stdout);
             }else{
-				wait(NULL);
-			}
-            
+                wait(NULL);
+            }
         } else {
             pipes = malloc((line->ncommands - 1)*sizeof(int*));//inicializamos n-1 pipes
             for(i = 0; i < line->ncommands - 1; i++){
@@ -229,41 +237,48 @@ int main() {
                 errorFork(pid);
                 if(esHijo(pid)){ // Hijo
                     if (i == 0){ // si es la primera iteración
-                        close(pipes[i][0]);
-                        dup2(pipes[i][1],STDOUT_FILENO);
-                        close(pipes[i][1]);
+                        close(pipes[0][0]);
+                        dup2(pipes[0][1],STDOUT_FILENO);
+                        close(pipes[0][1]);
                     }
                     if (i != 0 && i != (line->ncommands-1)){
                         // si no es ni la primera ni la última iteración
-                        close(pipes[i-1][1]);
+                        
                         close(pipes[i][0]);
-                        dup2(pipes[i-1][0],STDIN_FILENO);
+                        dup2(pipes[i-1][0], STDIN_FILENO);
                         close(pipes[i-1][0]);
                         dup2(pipes[i][1], STDOUT_FILENO);
                         close(pipes[i][1]);
                     }
-                    if (i == (line-> ncommands - 1)){
-                        close(pipes[i-1][1]);
-                        dup2(pipes[i-1][0], STDIN_FILENO);
+                    if (i!= 0 && i == (line-> ncommands - 1)){
+                        
+                        dup2(pipes[i-1][0],STDIN_FILENO);
                         close(pipes[i-1][0]);
                     }
-                    ejecutarComando(i, line);//
-                    
-					fflush(stdout);
+                    ejecutarComando(i, line);
                 } else { // Padre
-                    wait(&status);
-                    if(WIFEXITED(status)!=0){
-                        if(WEXITSTATUS(status)!=0){
-                            fprintf(stderr,"Error - el comando no se ejecutó correctamente. %s\n",strerror(errno));
-                            break;
-                        }
+                    if(i != line->ncommands - 1){
+                        close(pipes[i][1]); //cerramos el descriptor para que no se bloqueen las lecturas del hijo siguiente
                     }
+                    wait(NULL); // esperar al i-ésimo hijo
+                    
+                    
                 }
-                
             }
+            // después del for, padre cierra descriptores abiertos
         }
-        fprintf(stdout,"msh> ");
         
+        //wait(NULL);
+       // printf("msh> ");
+        fflush(stdout);
+        if(line->background==0){
+			exit(0);
+		}else{
+			//loquesea
+		}
+        signal(SIGINT,SIG_IGN);
+		signal(SIGQUIT,SIG_IGN);
+ 
     }
     return 0;
 }

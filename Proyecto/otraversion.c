@@ -118,8 +118,8 @@ int cambiarDirectorio(int nArgs, char** lArgs){
 
 void crearPrimero(int pipe[2], tline* line){
     
-    close(pipe[1]);
     dup2(pipe[1],STDOUT_FILENO);
+    close(pipe[1]);
     
     // comprobación de error
     if(line->redirect_input){//hay redirección de entrada
@@ -131,17 +131,36 @@ void crearPrimero(int pipe[2], tline* line){
 }
 
 void crearUltimo(int pipe[2], tline* line,int stdoutAux,int stdinAux){
-    close(pipe[1]); // Nunca utilizaremos el pipe de salida, por lo que lo cerramos
+   
+	close(pipe[1]); // Nunca utilizaremos el pipe de salida, por lo que lo cerramos
     
     if(line->redirect_output) { //hay redirección de salida
-        //pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
-        dup2(pipe[1],open(line->redirect_output, O_CREAT, O_WRONLY));
+        pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
+        dup2(pipe[1],STDOUT_FILENO);
         
     } else { //Escuchar por stdout
 		dup2(stdoutAux,1);
         close(stdoutAux);
         dup2(stdinAux,0);
         close(stdinAux);
+   //     dup2(stdoutAux,pipe[0]);
+        
+    }
+}
+void crearUltimoH(int pipe[2], tline* line,int stdoutAux,int stdinAux){
+   
+  //  close(pipe[1]); // Nunca utilizaremos el pipe de salida, por lo que lo cerramos
+    
+    if(line->redirect_output) { //hay redirección de salida
+        pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
+        dup2(pipe[1],STDOUT_FILENO);
+        
+    } else { //Escuchar por stdout
+		dup2(stdoutAux,1);
+        close(stdoutAux);
+        dup2(stdinAux,0);
+        close(stdinAux);
+        
     }
 }
 
@@ -194,13 +213,15 @@ int main() {
     int pipe_ph[2];
     int pipe_hp[2];
 	
-	int const stdoutAux = dup(1); //guardamos stdout actual
-    int const stdinAux = dup(0);	//guardamos stdin actual
+	int stdoutAux = dup(1); //guardamos stdout actual
+    int stdinAux = dup(0);	//guardamos stdin actual
+    
      
-
+	
     printf("msh> ");
     while(fgets(buf, 1024, stdin)){
         line = tokenize(buf);
+        
         if (line==NULL) {
             continue;
         } else {
@@ -211,6 +232,7 @@ int main() {
                 }
             }
         }
+        
         pipe(pipe_ph); // Creamos pipe en sentido padre -> hijo
         pipe(pipe_hp); // Creamos pipe en sentido hijo -> padre
         pid = fork();
@@ -223,20 +245,22 @@ int main() {
             close(pipe_ph[0]);
 		}
 		
+        
         for (i = 1; i <= line->ncommands; i++) { // Ejecución de la línea
             if (esHijo(pid)){//Hijo
                 if(i == 2){ // primera iteración del bucle cerrado
                     // Hacer que el stdin del hijo pase a ser ph[0]
                     dup2(pipe_ph[0],STDIN_FILENO);
+                    close(pipe_ph[0]);
                     // Hacer que el stdout del hijo lo escribimos en hp[1]
-                    close(pipe_hp[1]);
                     dup2(pipe_hp[1],STDOUT_FILENO);
+                    close(pipe_hp[1]);
+                  
                 }
                 if (i == line->ncommands){ // Restaurar STDOUT para poder escribir en él
-                    //crearUltimo(pipe_hp,line);
+                    crearUltimoH(pipe_hp,line,stdoutAux,stdinAux);
                     // Restaurar STDOUT
-                    dup2(stdoutAux, 1);
-                    close(stdoutAux);
+                    dup2(1, stdoutAux);
                     
                     // Cerrar pipes, hemos acabado
                 }
@@ -247,13 +271,14 @@ int main() {
                 if (i == 1){//leer de stdin o bien redirect-input
                     
                     crearPrimero(pipe_ph, line);
-                    
-					
+      			
                 }
                 if (i == 2){ // primera iteración del bucle "cerrado"
-					close(pipe_hp[0]);
+					
                     dup2(pipe_hp[0],STDIN_FILENO);
+                    close(pipe_hp[0]);
                     dup2(pipe_ph[1],STDOUT_FILENO);
+                    close(pipe_ph[1]);
                 }
                 if (i == line->ncommands){ // último mandato: restaurar stdout o redirect-output
                     
@@ -269,21 +294,28 @@ int main() {
                     
                 }
             }
-            if(esHijo(pid)){ // Hijo cierra descriptores abiertos
-                close(pipe_hp[1]);
-                close(pipe_ph[0]);
-                exit(0);
-            }else{ // padre cierra descriptores abiertos
-                close(pipe_hp[0]);
-                close(pipe_ph[1]);
-                if(line->background){
-                    pause();
-                }
-            }
+            
             // Suicidio colectivo
         }
+        if(esHijo(pid)){ // Hijo cierra descriptores abiertos
+			close(pipe_hp[1]);
+			close(pipe_ph[0]);
+                exit(0);
+			}else{ // padre cierra descriptores abiertos
+			close(pipe_hp[0]);
+			close(pipe_ph[1]);
+            if(line->background){
+				pause();
+            }
+        }
+        fprintf(stderr,"%s\n",strerror(errno));
+        
         wait(NULL);
         printf("msh> ");
-    }
+		}
+    
+    
+    
+    
     return 0;
 }
