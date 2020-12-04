@@ -9,12 +9,14 @@
 #include <sys/wait.h>
 #include <errno.h>
 
-
+    
 //Lista para manejar los bg
 typedef struct nodo //nombre estructura
 {
 	pid_t pid;
 	int indice;
+	int estado; //1 es EJECUTANDO, 0 es YA SE HA EJECUTADO
+	char buf[1024]; 
 	struct nodo *sig;
 } nodoL; //tipo dato estructura
 
@@ -23,6 +25,15 @@ typedef nodoL *lista;
 void nuevaLista(lista L){
 	L = NULL;
 }
+
+
+
+
+lista *ListaPID = NULL;
+
+
+
+
 void insertarDelante (lista *L, pid_t n){
 	lista aux;
 	aux = malloc(sizeof(nodoL)); //Crear un nuevo nodo.
@@ -41,11 +52,18 @@ void insertarDelante (lista *L, pid_t n){
 int mostrar(lista L){
 		//Debera mostrar los valores
 		while(L != NULL){ //Mientras cabeza no sea NULL
-        printf("%i\n",L->pid); //Imprimimos el valor del nodo
+		if(L->estado == 1){
+			printf("[%i] Ejecutando %s\n",L->indice,L->buf); //Imprimimos el valor del nodo
+		}else{
+			printf("[%i] Hecho %s\n",L->indice,L->buf); //Imprimimos el valor del nodo
+		
+		}
         L = L->sig; //Pasamos al siguiente nodo
     }
+    //eliminarHechos();
 		return 0;
 }
+
 int borrarElemento(lista *L, int nelemento){
 	
 	int i=0;
@@ -90,20 +108,31 @@ int borrarElemento(lista *L, int nelemento){
 
 
 }
+void actualizarL(lista *L,pid_t pidh){  // En la lista L tiene que actualizar el estado de
+										// ejecutando del nodo que tiene a pidh al estado terminado
+	printf(" ");//Para que no warnee
+	
+}
 
 int cambiarDirectorio(int nArgs, char** lArgs){
     char* nuevoDir = NULL;
+    char* buf;
+    char* barra;
+    
+    buf = NULL;
+    barra = malloc(sizeof(char));
+    
     if (nArgs == 1) { // ir a home
         nuevoDir = getenv("HOME");
     } else {
         if (nArgs > 2) {
             // número incorrecto de argumentos
             // lanzar mensaje
-            exit(1);
+            fprintf(stderr,"Error numero incorrecto de argumentos\n");
+            return 1; //No podemos matar al padre
         }
         if (*(lArgs[1]) != '/'){//ruta relativa
             nuevoDir = getcwd(nuevoDir, 0);
-            char* barra = malloc(sizeof(char));
             *barra = '/';
             nuevoDir = strcat(nuevoDir, barra);
             nuevoDir = strcat(nuevoDir, lArgs[1]);
@@ -111,9 +140,17 @@ int cambiarDirectorio(int nArgs, char** lArgs){
             nuevoDir = lArgs[1];
         }
     }
-    chdir(nuevoDir);
-    printf("%s", nuevoDir);
-    return 0;
+    int aux = chdir(nuevoDir);
+    if(aux==0){
+		buf=getcwd(buf,0);
+		printf("%s\n", buf);
+	}else{
+		fprintf(stderr,"Error en chdir.\n");
+	}
+	free(buf);
+	free(barra);
+	
+    return aux;
 }
 
 
@@ -176,12 +213,6 @@ void ejecutarComando(int i, tline* line){
 }
 
 
-void manejador(int sig){
-	if(sig == SIGINT){
-		kill(getpid(),SIGKILL);
-	}
-    
-}
 void redirStdin(char* inp){
 	int dirAux;
 	
@@ -227,6 +258,16 @@ void redirStderr(char* outerror){
 		
 	}
 }
+static void manejador(int sig, siginfo_t *siginfo, void *context){
+	
+	pid_t pidhijo = siginfo->si_pid;
+	//actualizarL(&L,pid); //Solamente marcar como terminado el nodo con ese pidhijo
+	
+	
+}
+#define CD "cd"
+#define JOBS "jobs"
+#define FG "fg"
 
 int main() {
     // Definición de variables
@@ -238,8 +279,14 @@ int main() {
     int stdoutAux = dup(1); //guardamos stdout actual
     int stdinAux = dup(0);	//guardamos stdin actual
     int stderrAux = dup(2);
-    
     int **pipes;
+    struct sigaction siginfo;
+    
+    
+    siginfo.sa_sigaction = &manejador;
+    siginfo.sa_flags = SA_SIGINFO;
+    sigaction(SIGUSR1,&siginfo,NULL);
+    
     
     //signal(SIGUSR1,manejadorSigUsr1);
     signal(SIGINT,SIG_IGN);
@@ -247,24 +294,62 @@ int main() {
 	
     //printf("msh> ");
     while(printf("msh> ") && fgets(buf, 1024, stdin)){
+		//Comprobar y limpiar lista de pids
 		
 		
         line = tokenize(buf);
         
         if (line==NULL) {
+			//eliminaryMostrarLista
             continue;
         } else {
+				if(strcmp(line->commands[0].argv[0],JOBS)==0){
+					//mostrar(); este es especial para jobs
+					continue;
+				}else if(strcmp(line->commands[0].argv[0],CD)==0){
+					cambiarDirectorio(line->commands[0].argc,line->commands[0].argv);
+					//eliminaryMostrarLista
+					continue;
+				}
+				else if(strcmp(line->commands[0].argv[0],FG)==0){
+					//Recorremos la lista hasta llegar al ultimo nodo
+					//Vemos si su estado es ejecutando
+					//El padre shell manda un kill a su hpadre, el hpadre en ese kill hace kill a su hijo
+					//y coloca la variable global a uno para los demas hijos que puedan crearse.
+					//En ese caso se hace el waitpid del pid del nodo
+					
+					//En caso contrario escribimos por stdout que el proceso ha finalizado
+					//WAITPID RECORDAR
+					
+					//eliminaryMostrarLista
+					continue;
+				}
+					
+				
+				
+			
+			
 			pid = fork();
+			
 			if (!esHijo(pid)){
-				wait(&status);
-				if(WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT ){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
+				if(line->background==0){
+					wait(&status);
+					if(WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT ){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
+					
+				}else{
+					
+					//añadirPorFinal(L,pid,buf); añadimos el proceso hijo bg
+					
+				}
+				//eliminaryMostrarLista
 				continue;
 			}else{
+				
 				//Redireccionamientos
 				
+				redirStderr(line->redirect_error); //pasamos la redireccion de error 
 				redirStdin(line->redirect_input); //pasamos la redireccion de entrada 
 				redirStdout(line->redirect_output); //pasamos la redireccion de salida 
-				redirStderr(line->redirect_error); //pasamos la redireccion de error 
 					
 			}
          }
@@ -275,14 +360,16 @@ int main() {
             pid = fork();
             if(esHijo(pid)){
 				
-				signal(SIGQUIT,SIG_DFL);
-				signal(SIGINT,SIG_DFL);
-			
+				if(line->background != 0 ){ //Si no esta en bg
+					signal(SIGQUIT,SIG_DFL);
+					signal(SIGINT,SIG_DFL);
+				}
                 ejecutarComando(0,line);
                 
             }else{
                 wait(&status);
                 if (WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT){
+					printf("\n");
 					exit(status); //devolvemos el status de su hijo
 				}
             }
@@ -297,8 +384,10 @@ int main() {
                 errorFork(pid);
                 if(esHijo(pid)){ // Hijo
 					
-					signal(SIGQUIT,SIG_DFL);
-					signal(SIGINT,SIG_DFL);
+					if(line->background!=0){
+						signal(SIGQUIT,SIG_DFL);
+						signal(SIGINT,SIG_DFL);
+					}	
 			
                     if (i == 0){ // si es la primera iteración
                         close(pipes[0][0]);
@@ -341,10 +430,21 @@ int main() {
         if(line->background==0){
 			exit(0);
 		}else{
-			//loquesea
+			kill(getppid(),SIGUSR1);
+			exit(0);
 		}
-        signal(SIGINT,SIG_IGN);
-		signal(SIGQUIT,SIG_IGN);
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  
     }
     
