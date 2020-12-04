@@ -165,28 +165,15 @@ int comprobarComando(char* comando){
     return esCd || esFg || esJobs;
 }
 
+
 void ejecutarComando(int i, tline* line){
 	int status;
-    pid_t pidaux;
-    pidaux=fork();
-    if(pidaux < 0){
-        fprintf(stderr, "Fallo de fork().%s\n", strerror(errno));
-    }
-    if(esHijo(pidaux)){
-		char* const* argumentos = line->commands[i-1].argv;
-		execvp(argumentos[0], argumentos);
-        fprintf(stderr,"Error al lanzar el comando. %s\n",strerror(errno));
-        exit(1);
-	}else{
-		wait(&status);
-		if(WIFEXITED(status)!=0){
-			if(WEXITSTATUS(status)!=0){
-				fprintf(stderr,"Error - el comando no se ejecutó correctamente. %s\n",strerror(errno));
-			}
-		}
-	}				
-	fflush(stdout);	
+    char* const* argumentos = line->commands[i].argv;	
+    execvp(argumentos[0], argumentos);
+    fprintf(stderr,"Error al lanzar el comando. %s\n",strerror(errno));
+    exit(1);
 }
+
 
 void manejadorSigUsr1(){
     
@@ -195,17 +182,17 @@ void manejadorSigUsr1(){
 int main() {
     // Definición de variables
     char buf [1024];
-    int i, j;
+    int i;
     pid_t pid;
     tline* line;
-    int pipe_ph[2];
-    int pipe_hp[2];
-    
+    int status;
     int stdoutAux = dup(1); //guardamos stdout actual
     int stdinAux = dup(0);	//guardamos stdin actual
     int stderrAux = dup(2);
     
-    signal(SIGUSR1,manejadorSigUsr1);
+    int **pipes;
+    
+    //signal(SIGUSR1,manejadorSigUsr1);
     
     printf("msh> ");
     while(fgets(buf, 1024, stdin)){
@@ -213,99 +200,70 @@ int main() {
         if (line==NULL) {
             continue;
         } else {
-            if(line->background == 1){
+            if(line->background){
                 pid = fork(); // Vamos a tener que ejecutar al menos un mandato
+                errorFork(pid); // ¿Ha habido algún error?
                 if(!esHijo(pid)){
                     continue; // El padre no hace nada más
                 }
             }
         }
-        pipe(pipe_ph); // Creamos pipe en sentido padre -> hijo
-        pipe(pipe_hp); // Creamos pipe en sentido hijo -> padre
-        pid = fork();
-        errorFork(pid); // ¿Ha habido algún error?
-        for (i = 1; i <= line->ncommands; i++) { // Ejecución de la línea
-            if (esHijo(pid)){//Hijo
-                if(i == 1){
-                    // Cerrar descriptores sin utilizar
-                    close(pipe_hp[0]);
-                    close(pipe_ph[1]);
-                    // duplicar pipe_ph[0] en stdin
-                    dup2(pipe_ph[0], STDIN_FILENO);
-                    close(pipe_ph[0]);
+        
+        if(line->ncommands == 1){
+            pid = fork();
+            if(esHijo(pid)){
+                ejecutarComando(0,line);
+                fflush(stdout);
+            }else{
+				wait(NULL);
+			}
+            
+        } else {
+            pipes = malloc((line->ncommands - 1)*sizeof(int*));//inicializamos n-1 pipes
+            for(i = 0; i < line->ncommands - 1; i++){
+                pipes[i] = malloc(2*sizeof(int)); // para cada pipe inicializamos dos enteros
+                pipe(pipes[i]); // para cada pipe inicializamos sus descriptores
+            }
+            for (i = 0; i < line->ncommands; i++) { // Ejecución de la línea
+                pid = fork();
+                errorFork(pid);
+                if(esHijo(pid)){ // Hijo
+                    if (i == 0){ // si es la primera iteración
+                        close(pipes[i][0]);
+                        dup2(pipes[i][1],STDOUT_FILENO);
+                        close(pipes[i][1]);
+                    }
+                    if (i != 0 && i != (line->ncommands-1)){
+                        // si no es ni la primera ni la última iteración
+                        close(pipes[i-1][1]);
+                        close(pipes[i][0]);
+                        dup2(pipes[i-1][0],STDIN_FILENO);
+                        close(pipes[i-1][0]);
+                        dup2(pipes[i][1], STDOUT_FILENO);
+                        close(pipes[i][1]);
+                    }
+                    if (i == (line-> ncommands - 1)){
+                        close(pipes[i-1][1]);
+                        dup2(pipes[i-1][0], STDIN_FILENO);
+                        close(pipes[i-1][0]);
+                    }
+                    ejecutarComando(i, line);//
                     
-                    //duplicar pipe_hp[1] en stdout
-                    dup2(pipe_hp[1], STDOUT_FILENO);
-                    close(pipe_hp[1]);
-                    // mandar señal al padre de que todo está listo
-                    kill(getppid(), SIGUSR1);
-                }
-                if(i == line->ncommands && i % 2 == 0){//si es el último mandato
-                    if(line->redirect_output != NULL){ // redirección de salida
-                        
-                    } else { // restaurar stdout
-                        dup2(stdoutAux, STDOUT_FILENO);
-                        fprintf(stderr, "HIJO - Stdout restaurado!\n");
-                        fflush(stdout);
-                    }
-                }
-                if(i % 2 == 0){
-					fflush(stdin);
-                    ejecutarComando(i, line);
-                    fflush(stdout);
-                    
-                        fprintf(stderr, "HIJO - Hice exec en iteracion : %i\n",i);
-                }
-            } else {//Padre
-                if(i == 1){
-                    if(line->redirect_input != NULL){ // es necesario redireccionar stdin
-                        
-                    }
-                    // Cerrar descriptores sin utilizar
-                    close(pipe_hp[1]);
-                    close(pipe_ph[0]);
-                    // Duplicar pipe_ph[1] en stdout
-                    dup2(pipe_ph[1], STDOUT_FILENO);
-                    close(pipe_ph[1]);
-                    // Esperar al hijo
-                    pause();
-                }
-                if(i == line->ncommands && i % 2 == 1){// si es el último mandato
-                    if(line->redirect_output != NULL){ // redirección de salida
-                        
-                    } else { // restaurar stdout
-                        dup2(stdoutAux, STDOUT_FILENO);
-                    }
-                }
-                if(i % 2 == 1){//iteración impar -> ejecutar mandato
-                    fflush(stdin);
-                    ejecutarComando(i, line);
 					fflush(stdout);
-					
-                        fprintf(stderr, "PADRE - Hice exec en iteracion : %i\n",i);
+                } else { // Padre
+                    wait(&status);
+                    if(WIFEXITED(status)!=0){
+                        if(WEXITSTATUS(status)!=0){
+                            fprintf(stderr,"Error - el comando no se ejecutó correctamente. %s\n",strerror(errno));
+                            break;
+                        }
+                    }
                 }
-                if(i == 1){//duplicar pipe_hp[0] en stdin
-                    dup2(pipe_hp[0], STDIN_FILENO);
-                    close(pipe_hp[0]);
-                }
+                
             }
         }
-        if(esHijo(pid)){ // Hijo cierra descriptores abiertos
-            close(pipe_hp[1]);
-            close(pipe_ph[0]);
-            exit(0);
-        }else{ // padre cierra descriptores abiertos
-            close(pipe_hp[0]);
-            close(pipe_ph[1]);
-            if(line->background){
-                pause();
-            }
-            // padre pone descriptores de nuevo
-            dup2(stdoutAux, STDOUT_FILENO);
-            dup2(stdinAux, STDIN_FILENO);
-        }
-        wait(NULL);
-        printf("msh> ");
+        fprintf(stdout,"msh> ");
+        
     }
     return 0;
 }

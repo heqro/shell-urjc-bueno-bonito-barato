@@ -170,7 +170,7 @@ void ejecutarComando(int i, tline* line){
     pid_t pidaux;
     pidaux=fork();
     if(pidaux < 0){
-        fprintf(stderr, "Fallo de fork().\n", strerror(errno));
+        fprintf(stderr, "Fallo de fork().%s\n", strerror(errno));
     }
     if(esHijo(pidaux)){
 		char* const* argumentos = line->commands[i-1].argv;
@@ -201,6 +201,8 @@ int main() {
     int pipe_ph[2];
     int pipe_hp[2];
     
+    
+    
     int stdoutAux = dup(1); //guardamos stdout actual
     int stdinAux = dup(0);	//guardamos stdin actual
     int stderrAux = dup(2);
@@ -226,30 +228,46 @@ int main() {
         errorFork(pid); // ¿Ha habido algún error?
         for (i = 1; i <= line->ncommands; i++) { // Ejecución de la línea
             if (esHijo(pid)){//Hijo
+				fprintf(stderr,"Existo HIJO\n");
+                fprintf(stderr,"Iter %i HIJO\n",i);
+                    
                 if(i == 1){
                     // Cerrar descriptores sin utilizar
                     close(pipe_hp[0]);
                     close(pipe_ph[1]);
+                    
+                    
                     // duplicar pipe_ph[0] en stdin
                     dup2(pipe_ph[0], STDIN_FILENO);
+                    fprintf(stdout,"REG1\n");
+                    fflush(stdout);
+                    
                     //duplicar pipe_hp[1] en stdout
                     dup2(pipe_hp[1], STDOUT_FILENO);
+					fprintf(stderr,"REG2\n");
+                    
                     // mandar señal al padre de que todo está listo
-                    kill(getppid(), SIGUSR1);
+                    //kill(getppid(), SIGUSR1);
                 }
+                
                 if(i == line->ncommands && i % 2 == 0){//si es el último mandato
+					fprintf(stderr,"Entro\n");
                     if(line->redirect_output != NULL){ // redirección de salida
                         
                     } else { // restaurar stdout
                         dup2(stdoutAux, STDOUT_FILENO);
-                        fprintf(stdout, "HIJO - Stdout restaurado!\n");
+                        fprintf(stderr, "HIJO - Stdout restaurado!\n");
                         fflush(stdout);
                     }
                 }
                 if(i % 2 == 0){
-                    ejecutarComando(i, line);
+					fprintf(stderr,"Hago comando HIJO\n");
+					sleep(1);
+					ejecutarComando(i, line);
+					sleep(1);
+                    fflush(stdin);
                 }
-            } else {//Padre
+            } else{//Padre
                 if(i == 1){
                     if(line->redirect_input != NULL){ // es necesario redireccionar stdin
                         
@@ -259,8 +277,9 @@ int main() {
                     close(pipe_ph[0]);
                     // Duplicar pipe_ph[1] en stdout
                     dup2(pipe_ph[1], STDOUT_FILENO);
+                    
                     // Esperar al hijo
-                    pause();
+                    //pause();
                 }
                 if(i == line->ncommands && i % 2 == 1){// si es el último mandato
                     if(line->redirect_output != NULL){ // redirección de salida
@@ -271,13 +290,20 @@ int main() {
                     }
                 }
                 if(i % 2 == 1){//iteración impar -> ejecutar mandato
+					fprintf(stderr,"Entro aqui en la iteracion %i\n",i);
+                    sleep(1);
                     ejecutarComando(i, line);
+                    sleep(1);
+                    fflush(stdin);
                 }
                 if(i == 1){//duplicar pipe_hp[0] en stdin
                     dup2(pipe_hp[0], STDIN_FILENO);
+                    
                 }
             }
-            // Suicidio colectivo
+            
+        }
+        // Suicidio colectivo
             if(esHijo(pid)){ // Hijo cierra descriptores abiertos
                 close(pipe_hp[1]);
                 close(pipe_ph[0]);
@@ -292,7 +318,6 @@ int main() {
                 dup2(stdoutAux, STDOUT_FILENO);
                 dup2(stdinAux, STDIN_FILENO);
             }
-        }
         wait(NULL);
         printf("msh> ");
     }
