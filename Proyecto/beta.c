@@ -265,6 +265,43 @@ static void manejador(int sig, siginfo_t *siginfo, void *context){
 	
 	
 }
+
+char* escribirPrompt2(){
+    char* dirActual = NULL;
+    dirActual = getcwd(dirActual, 0);
+    char* inicio = getenv("HOME");
+    char* promptShell = NULL;
+    char* promptAux = NULL;
+    promptShell = malloc(strlen(getenv("LOGNAME")) * sizeof(char));
+    promptShell = strcpy(promptShell,getenv("LOGNAME"));
+    if(!strcmp(inicio, dirActual)){ // estamos en home
+        promptShell = realloc(promptShell, strlen("msh | ~ >> ") * sizeof(char));
+        strcat(promptShell, "@msh | ~ >> ");
+    } else {
+        promptShell = realloc(promptShell, strlen("@msh | ") * sizeof(char));
+        strcat(promptShell, "@msh | ");
+        promptShell = realloc(promptShell, strlen(dirActual) * sizeof(char));
+        strcat(promptShell, dirActual);
+        promptShell = realloc(promptShell, strlen(" >> ") * sizeof(char));
+        strcat(promptShell, " >> ");
+    }
+    promptAux = malloc(strlen(promptShell) * sizeof(char));
+    strcpy(promptAux, promptShell);
+    free(promptShell);
+    return promptAux;
+}
+
+void escribirPrompt(){
+    char* dirActual = NULL;
+    dirActual = getcwd(dirActual, 0);
+    char* inicio = getenv("HOME");
+    if(!strcmp(inicio, dirActual)){
+        printf("%s@msh | ~ >> ", getenv("LOGNAME"));
+    } else {
+        printf("%s@msh | %s >> ", getenv("LOGNAME"), dirActual);
+    }
+}
+
 #define CD "cd"
 #define JOBS "jobs"
 #define FG "fg"
@@ -293,37 +330,41 @@ int main() {
 	signal(SIGQUIT,SIG_IGN);
 	
     //printf("msh> ");
-    while(printf("msh> ") && fgets(buf, 1024, stdin)){
+    escribirPrompt();
+    while(fgets(buf, 1024, stdin)){
 		//Comprobar y limpiar lista de pids
 		
 		
         line = tokenize(buf);
         
-        if (line==NULL) {
-			//eliminaryMostrarLista
+        if (line==NULL || !strcmp(buf,"\n")) {
+            escribirPrompt();
             continue;
         } else {
-				if(strcmp(line->commands[0].argv[0],JOBS)==0){
-					//mostrar(); este es especial para jobs
-					continue;
-				}else if(strcmp(line->commands[0].argv[0],CD)==0){
-					cambiarDirectorio(line->commands[0].argc,line->commands[0].argv);
-					//eliminaryMostrarLista
-					continue;
-				}
-				else if(strcmp(line->commands[0].argv[0],FG)==0){
-					//Recorremos la lista hasta llegar al ultimo nodo
-					//Vemos si su estado es ejecutando
-					//El padre shell manda un kill a su hpadre, el hpadre en ese kill hace kill a su hijo
-					//y coloca la variable global a uno para los demas hijos que puedan crearse.
-					//En ese caso se hace el waitpid del pid del nodo
-					
-					//En caso contrario escribimos por stdout que el proceso ha finalizado
-					//WAITPID RECORDAR
-					
-					//eliminaryMostrarLista
-					continue;
-				}
+            if(strcmp(line->commands[0].argv[0],JOBS)==0){
+                //mostrar(); este es especial para jobs
+                escribirPrompt();
+                continue;
+            }else if(strcmp(line->commands[0].argv[0],CD)==0){
+                cambiarDirectorio(line->commands[0].argc,line->commands[0].argv);
+                //eliminaryMostrarLista
+                escribirPrompt();
+                continue;
+            }
+            else if(strcmp(line->commands[0].argv[0],FG)==0){
+                //Recorremos la lista hasta llegar al ultimo nodo
+                //Vemos si su estado es ejecutando
+                //El padre shell manda un kill a su hpadre, el hpadre en ese kill hace kill a su hijo
+                //y coloca la variable global a uno para los demas hijos que puedan crearse.
+                //En ese caso se hace el waitpid del pid del nodo
+                
+                //En caso contrario escribimos por stdout que el proceso ha finalizado
+                //WAITPID RECORDAR
+                
+                //eliminaryMostrarLista
+                escribirPrompt();
+                continue;
+            }
 					
 				
 				
@@ -334,14 +375,15 @@ int main() {
 			if (!esHijo(pid)){
 				if(line->background==0){
 					wait(&status);
-					if(WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT ){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
-					
+					if(WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT ){
+                        printf("\n");
+                    } //print \n si se acaba con el hijo con Ctrl C
 				}else{
 					
 					//añadirPorFinal(L,pid,buf); añadimos el proceso hijo bg
-					
 				}
 				//eliminaryMostrarLista
+				escribirPrompt();
 				continue;
 			}else{
 				
