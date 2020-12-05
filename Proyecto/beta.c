@@ -266,30 +266,30 @@ static void manejador(int sig, siginfo_t *siginfo, void *context){
 	
 }
 
-char* escribirPrompt2(){
-    char* dirActual = NULL;
-    dirActual = getcwd(dirActual, 0);
-    char* inicio = getenv("HOME");
-    char* promptShell = NULL;
-    char* promptAux = NULL;
-    promptShell = malloc(strlen(getenv("LOGNAME")) * sizeof(char));
-    promptShell = strcpy(promptShell,getenv("LOGNAME"));
-    if(!strcmp(inicio, dirActual)){ // estamos en home
-        promptShell = realloc(promptShell, strlen("msh | ~ >> ") * sizeof(char));
-        strcat(promptShell, "@msh | ~ >> ");
-    } else {
-        promptShell = realloc(promptShell, strlen("@msh | ") * sizeof(char));
-        strcat(promptShell, "@msh | ");
-        promptShell = realloc(promptShell, strlen(dirActual) * sizeof(char));
-        strcat(promptShell, dirActual);
-        promptShell = realloc(promptShell, strlen(" >> ") * sizeof(char));
-        strcat(promptShell, " >> ");
-    }
-    promptAux = malloc(strlen(promptShell) * sizeof(char));
-    strcpy(promptAux, promptShell);
-    free(promptShell);
-    return promptAux;
-}
+// char* escribirPrompt2(){
+//     char* dirActual = NULL;
+//     dirActual = getcwd(dirActual, 0);
+//     char* inicio = getenv("HOME");
+//     char* promptShell = NULL;
+//     char* promptAux = NULL;
+//     promptShell = malloc(strlen(getenv("LOGNAME")) * sizeof(char));
+//     promptShell = strcpy(promptShell,getenv("LOGNAME"));
+//     if(!strcmp(inicio, dirActual)){ // estamos en home
+//         promptShell = realloc(promptShell, strlen("msh | ~ >> ") * sizeof(char));
+//         strcat(promptShell, "@msh | ~ >> ");
+//     } else {
+//         promptShell = realloc(promptShell, strlen("@msh | ") * sizeof(char));
+//         strcat(promptShell, "@msh | ");
+//         promptShell = realloc(promptShell, strlen(dirActual) * sizeof(char));
+//         strcat(promptShell, dirActual);
+//         promptShell = realloc(promptShell, strlen(" >> ") * sizeof(char));
+//         strcat(promptShell, " >> ");
+//     }
+//     promptAux = malloc(strlen(promptShell) * sizeof(char));
+//     strcpy(promptAux, promptShell);
+//     free(promptShell);
+//     return promptAux;
+// }
 
 void escribirPrompt(){
     char* dirActual = NULL;
