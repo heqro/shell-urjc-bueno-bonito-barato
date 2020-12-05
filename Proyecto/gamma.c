@@ -319,7 +319,7 @@ int main() {
 	signal(SIGQUIT,SIG_IGN);
 	
     //printf("msh> ");
-    while(printf("msh") && fgets(buf, 1024, stdin)){
+    while(printf("msh> ") && fgets(buf, 1024, stdin)){
 		//Comprobar y limpiar lista de pids
 		
 		
