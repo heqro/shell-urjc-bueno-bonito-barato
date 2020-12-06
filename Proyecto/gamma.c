@@ -266,31 +266,20 @@ static void manejador(int sig, siginfo_t *siginfo, void *context){
 	
 }
 
-char* escribirPrompt(){
+int escribirPrompt(){
     char* dirActual = NULL;
     dirActual = getcwd(dirActual, 0);
     char* inicio = getenv("HOME");
-    char* promptShell = NULL;
-    char* promptAux = NULL;
-    promptShell = malloc(strlen(getenv("LOGNAME")) * sizeof(char));
-    promptShell = strcpy(promptShell,getenv("LOGNAME"));
-    if(!strcmp(inicio, dirActual)){ // estamos en home
-        promptShell = realloc(promptShell, strlen("msh | ~ >> ") * sizeof(char));
-        strcat(promptShell, "@msh | ~ >> ");
-    } else {
-        promptShell = realloc(promptShell, strlen("@msh | ") * sizeof(char));
-        strcat(promptShell, "@msh | ");
-        promptShell = realloc(promptShell, strlen(dirActual) * sizeof(char));
-        strcat(promptShell, dirActual);
-        promptShell = realloc(promptShell, strlen(" >> ") * sizeof(char));
-        strcat(promptShell, " >> ");
+    if(inicio == NULL) {
+        return 0;
     }
-    promptAux = malloc(strlen(promptShell) * sizeof(char));
-    strcpy(promptAux, promptShell);
-    free(promptShell);
-    return promptAux;
+    if(!strcmp(inicio, dirActual)){
+        printf("%s@msh | ~ >> ", getenv("LOGNAME"));
+    } else {
+        printf("%s@msh | %s >> ", getenv("LOGNAME"), dirActual);
+    }
+    return 1;
 }
-
 #define CD "cd"
 #define JOBS "jobs"
 #define FG "fg"
@@ -319,7 +308,7 @@ int main() {
 	signal(SIGQUIT,SIG_IGN);
 	
     //printf("msh> ");
-    while(printf("msh> ") && fgets(buf, 1024, stdin)){
+    while(escribirPrompt() && fgets(buf, 1024, stdin)){
 		//Comprobar y limpiar lista de pids
 		
 		
