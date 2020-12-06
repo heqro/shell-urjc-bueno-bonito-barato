@@ -69,7 +69,17 @@ typedef struct listaPIDInsercionFinal
     nodo_t* final;
 } listaPIDInsercionFinal_t;
 
+
+
+//Lista 
+listaPIDInsercionFinal_t ListaPID;
+
+
+
+
+
 void crearVacia(listaPIDInsercionFinal_t* L){
+    L = malloc(sizeof(listaPIDInsercionFinal_t));
     L->cabecera = NULL;
     L->final = NULL;
 }
@@ -84,7 +94,7 @@ void insertarFinal(elem_t elem, listaPIDInsercionFinal_t* L){
         asignar(&(L->cabecera->elem), &elem);
         L->cabecera->indice = 1;
         L->final = L->cabecera;
-        printf("[1] %d\n", L->cabecera->elem.pid);
+        printf("\n[1] %d\n", L->cabecera->elem.pid);
     } else {
         nodo_t* ptrAux = malloc(sizeof(nodo_t));
         asignar(&ptrAux->elem, &elem);
@@ -92,7 +102,7 @@ void insertarFinal(elem_t elem, listaPIDInsercionFinal_t* L){
         L->final->sig = ptrAux;
         ptrAux->sig = NULL;
         L->final = ptrAux;
-        printf("[%d] %d\n", ptrAux->indice, ptrAux->elem.pid);
+        printf("\n[%d] %d\n", ptrAux->indice, ptrAux->elem.pid);
     }
 }
 
@@ -110,13 +120,43 @@ void borrarElementoPID(pid_t pid, listaPIDInsercionFinal_t* L){
         free(ptrActual);
     }
 }
+int limpiarLista(listaPIDInsercionFinal_t* L, int clasificar){ //1 JOBS 0 MANDATO NORMAL
 
-void mostrarLista(listaPIDInsercionFinal_t* L){
+	nodo_t* ptrAux;
+	nodo_t* ptrAux2;
+	if(!esVacia(L)){
+		ptrAux = L->cabecera;
+		while(ptrAux != NULL){
+			if(ptrAux->elem.estado==0){
+				ptrAux2 = ptrAux->sig;
+				if(clasificar == 1){
+					borrarElementoPID(ptrAux->elem.pid,L);
+					ptrAux = ptrAux2;
+				}else if(clasificar == 0){
+					mostrarNodo(ptrAux);
+					borrarElementoPID(ptrAux->elem.pid,L);
+					ptrAux = ptrAux2;
+				}else{
+					return 1;
+				}
+			}
+			ptrAux = ptrAux->sig;
+        }
+	}
+	return 0;
+    
+
+
+
+}
+
+void mostrarLista(listaPIDInsercionFinal_t* L){ //jobs
     nodo_t* ptrAux = L->cabecera;
     while(ptrAux != NULL){
         mostrarNodo(ptrAux);
         ptrAux = ptrAux->sig;
     }
+    limpiarLista(L,1);
 }
 
 elem_t* getElemPID(pid_t pid, listaPIDInsercionFinal_t* L){
@@ -277,10 +317,25 @@ void redirStderr(char* outerror){
 }
 static void manejador(int sig, siginfo_t *siginfo, void *context){
 	
+	
 	pid_t pidhijo = siginfo->si_pid;
-	//actualizarL(&L,pid); //Solamente marcar como terminado el nodo con ese pidhijo
+	fprintf(stderr,"Soy la señal\n");
+					fprintf(stderr,"(SEÑAL)pidhijo tiene pid  %i\n", pidhijo);
 	
 	
+	//elem_t * elemaux = getElemPID(pidhijo,&ListaPID);
+	//terminarElem(elemaux);
+	
+}
+
+void manejador1(int sig){
+	pid_t pid;
+	pid = wait(NULL);
+	if (pid !=-1){ //Para que no entre el hijo sin hijo
+		fprintf(stderr,"Soy la señal\n");
+		fprintf(stderr,"(SEÑAL)pidhijo tiene pid  %i\n", pid);
+		fflush(stdout);
+	}
 }
 
 int escribirPrompt(){
@@ -301,6 +356,8 @@ int escribirPrompt(){
 #define JOBS "jobs"
 #define FG "fg"
 
+
+
 int main() {
     // Definición de variables
     char buf [1024];
@@ -314,6 +371,7 @@ int main() {
     int **pipes;
     struct sigaction siginfo;
     
+    crearVacia(&ListaPID);
     
     siginfo.sa_sigaction = &manejador;
     siginfo.sa_flags = SA_SIGINFO;
@@ -325,21 +383,22 @@ int main() {
 	signal(SIGQUIT,SIG_IGN);
 	
     //printf("msh> ");
-    while(escribirPrompt() && fgets(buf, 1024, stdin)){
+    while(escribirPrompt() && !fflush(stdout) && fgets(buf, 1024, stdin)){
 		//Comprobar y limpiar lista de pids
 		
 		
         line = tokenize(buf);
         
         if (line==NULL || !strcmp(buf,"\n")) {
+            limpiarLista(&ListaPID,0);
             continue;
         } else {
             if(strcmp(line->commands[0].argv[0],JOBS)==0){
-                //mostrar(); este es especial para jobs
+                mostrarLista(&ListaPID);
                 continue;
             }else if(strcmp(line->commands[0].argv[0],CD)==0){
                 cambiarDirectorio(line->commands[0].argc,line->commands[0].argv);
-                //eliminaryMostrarLista
+                limpiarLista(&ListaPID,0);
                 continue;
             }
             else if(strcmp(line->commands[0].argv[0],FG)==0){
@@ -359,20 +418,27 @@ int main() {
 				
 				
 			
-			
-			pid = fork();
+			if (line->background==1){
+				signal(SIGCHLD,manejador1);
+				pid = fork();
+			}else{
+				pid =fork();
+			}
 			
 			if (!esHijo(pid)){
-				if(line->background==0){
+				if(line->background==0){ //No bg
 					wait(&status);
+					fprintf(stderr,"Salgo del wait\n");
 					if(WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT ){printf("\n");} //print \n si se acaba con el hijo con Ctrl C
 					
 				}else{
-					
-					//añadirPorFinal(L,pid,buf); añadimos el proceso hijo bg
+					//Tratar buf
+					//elem_t *elem = crearElemento(getpid(),buf);
+					//insertarFinal(*elem, &ListaPID);
 					
 				}
-				//eliminaryMostrarLista
+				//limpiarLista(&ListaPID,0);
+				fprintf(stderr,"Entro por este continue\n");
 				continue;
 			}else{
 				
@@ -391,18 +457,32 @@ int main() {
             pid = fork();
             if(esHijo(pid)){
 				
-				if(line->background != 0 ){ //Si no esta en bg
+				
+				if(line->background == 0 ){ //Si no esta en bg
 					signal(SIGQUIT,SIG_DFL);
 					signal(SIGINT,SIG_DFL);
 				}
                 ejecutarComando(0,line);
                 
             }else{
+				if(line->background == 1){ //Añadimos el mandato en bg a la ListaPID
+					//fprintf(stderr,"Creo elemento\n");
+					elem_t *elem = crearElemento(getpid(),buf);
+					insertarFinal(*elem, &ListaPID);
+					//fprintf(stderr,"Elemento creado\n");
+				}	
+				
                 wait(&status);
                 if (WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT){
-					printf("\n");
-					exit(status); //devolvemos el status de su hijo
+					printf("\n");	
 				}
+				if(line->background == 1){ //si esta en bg
+					//fprintf(stderr,"Detono señal\n");
+					//kill(getppid(),SIGUSR1);
+					//fprintf(stderr,"Señal detonada\n");
+				}
+				
+				exit(status); //devolvemos el status de su hijo
             }
         } else {
             pipes = malloc((line->ncommands - 1)*sizeof(int*));//inicializamos n-1 pipes
@@ -461,7 +541,7 @@ int main() {
         if(line->background==0){
 			exit(0);
 		}else{
-			kill(getppid(),SIGUSR1);
+			kill(getppid(),SIGUSR1); //El padre edita la lista global de pid
 			exit(0);
 		}
  
