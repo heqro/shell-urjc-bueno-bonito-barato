@@ -79,7 +79,7 @@ listaPIDInsercionFinal_t ListaPID;
 
 
 void crearVacia(listaPIDInsercionFinal_t* L){
-    L = malloc(sizeof(listaPIDInsercionFinal_t));
+    //L = malloc(sizeof(listaPIDInsercionFinal_t));
     L->cabecera = NULL;
     L->final = NULL;
 }
@@ -387,8 +387,6 @@ int main() {
     siginfo.sa_sigaction = &manejador;
     siginfo.sa_flags = SA_SIGINFO;
     sigaction(SIGUSR1,&siginfo,NULL);
-    
-    
     //signal(SIGUSR1,manejadorSigUsr1);
     signal(SIGINT,SIG_IGN);
 	signal(SIGQUIT,SIG_IGN);
