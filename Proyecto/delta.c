@@ -330,10 +330,11 @@ static void manejador(int sig, siginfo_t *siginfo, void *context){
 
 void manejador1(int sig){
 	pid_t pid;
-	pid = wait(NULL);
+		pid = wait(NULL);
+	
 	if (pid !=-1){ //Para que no entre el hijo sin hijo
-		fprintf(stderr,"Soy la señal\n");
-		fprintf(stderr,"(SEÑAL)pidhijo tiene pid  %i\n", pid);
+		elem_t *aux = getElemPID(pid,&ListaPID);
+		terminarElem(aux);
 		fflush(stdout);
 	}
 }
@@ -385,7 +386,7 @@ int main() {
     //printf("msh> ");
     while(escribirPrompt() && !fflush(stdout) && fgets(buf, 1024, stdin)){
 		//Comprobar y limpiar lista de pids
-		
+		mostrarLista(&ListaPID);
 		
         line = tokenize(buf);
         
@@ -433,12 +434,15 @@ int main() {
 					
 				}else{
 					//Tratar buf
-					//elem_t *elem = crearElemento(getpid(),buf);
-					//insertarFinal(*elem, &ListaPID);
+					elem_t *elem = crearElemento(pid,buf);
+					fprintf(stderr,"Entro por este continue %i\n",pid);
+				
+					insertarFinal(*elem, &ListaPID);
 					
 				}
 				//limpiarLista(&ListaPID,0);
 				fprintf(stderr,"Entro por este continue\n");
+				//pause();
 				continue;
 			}else{
 				
@@ -467,8 +471,9 @@ int main() {
             }else{
 				if(line->background == 1){ //Añadimos el mandato en bg a la ListaPID
 					//fprintf(stderr,"Creo elemento\n");
-					elem_t *elem = crearElemento(getpid(),buf);
-					insertarFinal(*elem, &ListaPID);
+					//elem_t *elem = crearElemento(getpid(),buf);
+					//insertarFinal(*elem, &ListaPID);
+					
 					//fprintf(stderr,"Elemento creado\n");
 				}	
 				
