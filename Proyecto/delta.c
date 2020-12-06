@@ -112,7 +112,7 @@ void borrarElementoPID(pid_t pid, listaPIDInsercionFinal_t* L){
     nodo_t* ptrActual;
     if(!esVacia(L)){
         ptrActual = L->cabecera;
-        while(pid != pidElem(ptrActual->elem)){
+        while((ptrActual != NULL) && pid != pidElem(ptrActual->elem)){
             ptrAnterior = ptrActual;
             ptrActual = ptrActual->sig;
         }
@@ -120,22 +120,36 @@ void borrarElementoPID(pid_t pid, listaPIDInsercionFinal_t* L){
         free(ptrActual);
     }
 }
-int limpiarLista(listaPIDInsercionFinal_t* L, int clasificar){ //1 JOBS 0 MANDATO NORMAL
 
+void copiarLista(listaPIDInsercionFinal_t* L, listaPIDInsercionFinal_t* lAux){
+    nodo_t* ptrAux;
+    if(!esVacia(L) && esVacia(lAux)){
+        ptrAux = L->cabecera;
+        while(ptrAux != NULL){
+            insertarFinal(ptrAux->elem, lAux);
+            ptrAux = ptrAux->sig;
+        }
+    }
+}
+
+int limpiarLista(listaPIDInsercionFinal_t* L, int clasificar){ //1 JOBS 0 MANDATO NORMAL
 	nodo_t* ptrAux;
-	nodo_t* ptrAux2;
-	if(!esVacia(L)){
-		ptrAux = L->cabecera;
+    listaPIDInsercionFinal_t lAux;
+    
+    crearVacia(&lAux);
+    copiarLista(L, &lAux);
+	if(!esVacia(&lAux)){
+		ptrAux = lAux.cabecera;
 		while(ptrAux != NULL){
 			if(ptrAux->elem.estado==0){
-				ptrAux2 = ptrAux->sig;
+				//ptrAux2 = ptrAux->sig;
 				if(clasificar == 1){
 					borrarElementoPID(ptrAux->elem.pid,L);
-					ptrAux = ptrAux2;
+					//ptrAux = ptrAux2;
 				}else if(clasificar == 0){
 					mostrarNodo(ptrAux);
 					borrarElementoPID(ptrAux->elem.pid,L);
-					ptrAux = ptrAux2;
+					//ptrAux = ptrAux2;
 				}else{
 					return 1;
 				}
@@ -143,11 +157,8 @@ int limpiarLista(listaPIDInsercionFinal_t* L, int clasificar){ //1 JOBS 0 MANDAT
 			ptrAux = ptrAux->sig;
         }
 	}
+	printf("Copié bien!");
 	return 0;
-    
-
-
-
 }
 
 void mostrarLista(listaPIDInsercionFinal_t* L){ //jobs
@@ -373,7 +384,6 @@ int main() {
     struct sigaction siginfo;
     
     crearVacia(&ListaPID);
-    
     siginfo.sa_sigaction = &manejador;
     siginfo.sa_flags = SA_SIGINFO;
     sigaction(SIGUSR1,&siginfo,NULL);
@@ -382,14 +392,11 @@ int main() {
     //signal(SIGUSR1,manejadorSigUsr1);
     signal(SIGINT,SIG_IGN);
 	signal(SIGQUIT,SIG_IGN);
-	
-    //printf("msh> ");
     while(escribirPrompt() && !fflush(stdout) && fgets(buf, 1024, stdin)){
 		//Comprobar y limpiar lista de pids
-		mostrarLista(&ListaPID);
+        mostrarLista(&ListaPID);
 		
         line = tokenize(buf);
-        
         if (line==NULL || !strcmp(buf,"\n")) {
             limpiarLista(&ListaPID,0);
             continue;
@@ -436,9 +443,7 @@ int main() {
 					//Tratar buf
 					elem_t *elem = crearElemento(pid,buf);
 					fprintf(stderr,"Entro por este continue %i\n",pid);
-				
 					insertarFinal(*elem, &ListaPID);
-					
 				}
 				//limpiarLista(&ListaPID,0);
 				fprintf(stderr,"Entro por este continue\n");
