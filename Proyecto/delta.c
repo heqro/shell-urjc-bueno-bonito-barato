@@ -218,6 +218,13 @@ elem_t* getElemPID(pid_t pid, listaPIDInsercionFinal_t* L){
     }
     return NULL;
 }
+nodo_t* getUltimo(listaPIDInsercionFinal_t* L){
+    if (!esVacia(L)){
+		return L->final;
+	}else{		
+		return NULL;
+	}
+}
 
 int cambiarDirectorio(int nArgs, char** lArgs){
     char* nuevoDir = NULL;
@@ -363,27 +370,40 @@ void redirStderr(char* outerror){
 		
 	}
 }
-static void manejador(int sig, siginfo_t *siginfo, void *context){
-	
-	
-	pid_t pidhijo = siginfo->si_pid;
-	fprintf(stderr,"Soy la señal\n");
-					fprintf(stderr,"(SEÑAL)pidhijo tiene pid  %i\n", pidhijo);
-	
-	
-	//elem_t * elemaux = getElemPID(pidhijo,&ListaPID);
-	//terminarElem(elemaux);
-	
-}
+
+int control=0; //Señal que nos permite hacer ctrl c si entra a fg
+pid_t pidglobal;
+
+
 
 void manejador1(int sig){
-	pid_t pid;
+	if(sig == SIGCHLD){
+		pid_t pid;
 		pid = wait(NULL);
 	
-	if (pid !=-1){ //Para que no entre el hijo sin hijo
-		elem_t *aux = getElemPID(pid,&ListaPID);
-		terminarElem(aux);
-		fflush(stdout);
+		if (pid !=-1){ //Para que no entre el hijo sin hijo
+			elem_t *aux = getElemPID(pid,&ListaPID);
+			terminarElem(aux);
+			fflush(stdout);
+		}
+	}
+	if(sig == SIGUSR1){
+		
+		
+		control = 1;
+		fprintf(stderr,"1\n");
+		kill(pidglobal,SIGUSR2);
+		
+		fprintf(stderr,"2 %i\n",pidglobal);
+	
+	}
+	if(sig == SIGUSR2){
+		
+		fprintf(stderr,"3\n");
+		signal(SIGINT,SIG_DFL);
+		signal(SIGQUIT,SIG_DFL);
+		
+		fprintf(stderr,"4\n");
 	}
 }
 
@@ -421,10 +441,10 @@ int main() {
     struct sigaction siginfo;
     
     crearVacia(&ListaPID);
-    siginfo.sa_sigaction = &manejador;
-    siginfo.sa_flags = SA_SIGINFO;
-    sigaction(SIGUSR1,&siginfo,NULL);
-    //signal(SIGUSR1,manejadorSigUsr1);
+    
+    signal(SIGUSR1,manejador1);
+    signal(SIGUSR2,manejador1);
+    
     signal(SIGINT,SIG_IGN);
 	signal(SIGQUIT,SIG_IGN);
     while(escribirPrompt() && fgets(buf, 1024, stdin)){
@@ -447,13 +467,25 @@ int main() {
                 //Recorremos la lista hasta llegar al ultimo nodo
                 //Vemos si su estado es ejecutando
                 //El padre shell manda un kill a su hpadre, el hpadre en ese kill hace kill a su hijo
+                 
+                 nodo_t *ultimonodo=getUltimo(&ListaPID);
+                 if(ultimonodo->elem.estado == 1){
+					kill(ultimonodo->elem.pid,SIGUSR1);
+					waitpid(ultimonodo->elem.pid,&status,0); //Esperamos a que el proceso acabe
+					
+				 }else if(ultimonodo->elem.estado == 0){
+					 fprintf(stdout,"msh: fg : El trabajo ha terminado");
+				 }
+                 
+                
                 //y coloca la variable global a uno para los demas hijos que puedan crearse.
                 //En ese caso se hace el waitpid del pid del nodo
                 
                 //En caso contrario escribimos por stdout que el proceso ha finalizado
                 //WAITPID RECORDAR
                 
-                //eliminaryMostrarLista
+                
+                limpiarLista(&ListaPID,0);
                 continue;
             }
 					
@@ -498,16 +530,19 @@ int main() {
         
         if(line->ncommands == 1){
             pid = fork();
+            
             if(esHijo(pid)){
 				
 				
-				if(line->background == 0 ){ //Si no esta en bg
+				
+				if(line->background == 0){ //Si no esta en bg
 					signal(SIGQUIT,SIG_DFL);
 					signal(SIGINT,SIG_DFL);
 				}
                 ejecutarComando(0,line);
                 
             }else{
+				pidglobal = pid; //guardamos el hijo por si lo necesitamos para fg
 				if(line->background == 1){ //Añadimos el mandato en bg a la ListaPID
 					//fprintf(stderr,"Creo elemento\n");
 					//elem_t *elem = crearElemento(getpid(),buf);
@@ -539,7 +574,7 @@ int main() {
                 errorFork(pid);
                 if(esHijo(pid)){ // Hijo
 					
-					if(line->background!=0){
+					if(line->background==0 || control){
 						signal(SIGQUIT,SIG_DFL);
 						signal(SIGINT,SIG_DFL);
 					}	
@@ -565,6 +600,8 @@ int main() {
                     }
                     ejecutarComando(i, line);
                 } else { // Padre
+					
+					pidglobal = pid; //guardamos el hijo por si lo necesitamos para fg
                     if(i != line->ncommands - 1){
                         close(pipes[i][1]); //cerramos el descriptor para que no se bloqueen las lecturas del hijo siguiente
                     }
