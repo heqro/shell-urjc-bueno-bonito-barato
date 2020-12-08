@@ -97,7 +97,7 @@
   aquellos que hayan sido completados de forma análoga a como realiza Bash.
 
   En la sección de pseudocódigo se procede a explicar más concretamente cómo
-  implemetnamos la comunicación de <verbatim|PMandato> con sus hijos.
+  implementamos la comunicación de <verbatim|PMandato> con sus hijos.
 
   <subsubsection|Pseudocódigo>
 
