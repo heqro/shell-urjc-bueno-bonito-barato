@@ -461,6 +461,10 @@ int main() {
             }
             else if(strcmp(line->commands[0].argv[0],FG)==0){
                 nodo_t *ultimonodo=getUltimo(&ListaPID);
+                if(ultimonodo == NULL){
+                    printf("fg: actual: no existe tal trabajo\n");
+                    continue;
+                }
                  if(ultimonodo->elem.estado == 1){
 					mostrarNodo(ultimonodo);
 					waitpid(ultimonodo->elem.pid,&status,0); //Esperamos a que el proceso acabe
