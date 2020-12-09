@@ -351,7 +351,7 @@ void redirStdout(char* output){
 	int dirAux;
 	
 	if (output!=NULL){
-		dirAux = open(output,O_WRONLY | O_CREAT);
+		dirAux = open(output,O_WRONLY | O_CREAT | O_TRUNC , S_IRWXU);
 		if(dirAux < 0){
 			fprintf(stderr,"Fichero : Error. %s\n",strerror(errno));
             tcsetpgrp(STDIN_FILENO,pidglobal); // devolvemos poderes al padre dado que hemos fracasado
@@ -367,7 +367,7 @@ void redirStderr(char* outerror){
 	int dirAux;
 	
 	if (outerror!=NULL){
-		dirAux = open(outerror,O_WRONLY| O_CREAT);
+		dirAux = open(outerror,O_WRONLY| O_CREAT | O_TRUNC, S_IRWXU);
 		if(dirAux < 0){
 			fprintf(stderr,"Fichero: Error. %s\n",strerror(errno));
             tcsetpgrp(STDIN_FILENO,pidglobal); // devolvemos poderes al padre dado que hemos fracasado
@@ -421,7 +421,7 @@ static void handler(int sig, siginfo_t *siginfo, void *context){
 
 
 struct sigaction devolverPoderes;
-    
+pid_t pidh; //PID del hijo que hace exec    
 
 static void estamosEnForeground(int sig, siginfo_t *siginfo, void *context){
 	
@@ -434,7 +434,9 @@ static void estamosEnForeground(int sig, siginfo_t *siginfo, void *context){
 
 static void devolverControl(int sig, siginfo_t *siginfo, void *context){
     printf("\n");
+    kill(pidh,SIGTERM);
     tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+    
     exit(35);
 }
 
@@ -475,7 +477,7 @@ void esperarHijos(){
     int status;
     pid_t aux = waitpid((pid_t)-1,&status,WNOHANG|WUNTRACED);
     if(&status != NULL && aux > 0){
-        printf("Me ha comentado sus movidas %i\n", aux);
+        //printf("Me ha comentado sus movidas %i\n", aux);
         elem_t* elemAux = getElemPID(aux, &ListaPID);
         if(WIFSTOPPED(status)){
             detenerElem(elemAux);
@@ -608,7 +610,8 @@ int main() {
 				//Redireccionamientos
 				if(setpgid(0, 0) < 0){
                     perror("setpgid");
-                    exit(1);
+                    tcsetpgrp(STDIN_FILENO, pidglobal); // pasarle el control al padreshell
+					exit(1);
                 }
 				redirStderr(line->redirect_error); //pasamos la redireccion de error 
 				redirStdin(line->redirect_input); //pasamos la redireccion de entrada 
@@ -624,6 +627,7 @@ int main() {
             if(esHijo(pid)){
                 ejecutarComando(0,line);
             }else{
+				pidh = pid;
                 waitpid(pid,&status,WUNTRACED);
                 if(WIFSTOPPED(status) != 0){
                     // lanzar señal para que nos marque como detenidos
@@ -670,6 +674,7 @@ int main() {
                     }
                     ejecutarComando(i, line);
                 } else { // Padre
+					pidh = pid;
 					if(i != line->ncommands - 1){
                         close(pipes[i][1]); //cerramos el descriptor para que no se bloqueen las lecturas del hijo siguiente
                     }
@@ -689,6 +694,7 @@ int main() {
                 free(pipes[i]); // para cada pipe inicializamos dos enteros
             }
             free(pipes);
+            fprintf(stderr,"HAAGO FREE\n");
         }
         exit(0);
  
