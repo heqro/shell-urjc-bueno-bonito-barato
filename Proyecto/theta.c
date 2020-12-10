@@ -44,6 +44,10 @@ int igual(elem_t* elem1, elem_t* elem2){
     }
 }
 
+void mostrarElem(elem_t* elem){
+	fprintf(stdout,"%s",elem->buf);
+}
+
 void ejecutarElem(elem_t* elem){
     elem->estado = 1;
 }
@@ -478,7 +482,7 @@ int main() {
                     printf("fg: actual: no existe tal trabajo\n");
                     continue;
                 }
-                mostrarNodo(ultimonodo);
+                mostrarElem(&ultimonodo->elem); //Mostramos el buffer
                 switch(ultimonodo->elem.estado){
                     case 1: // en ejecución
                         //Darle control
