@@ -88,8 +88,10 @@ typedef struct listaPIDInsercionFinal
     nodo_t* final;
 } listaPIDInsercionFinal_t;
 
-
-
+//Constantes
+#define CD "cd"
+#define JOBS "jobs"
+#define FG "fg"
 //Lista 
 listaPIDInsercionFinal_t ListaPID;
 //foreground
@@ -99,7 +101,6 @@ pid_t pidglobal;
 
 
 void crearVacia(listaPIDInsercionFinal_t* L){
-    //L = malloc(sizeof(listaPIDInsercionFinal_t));
     L->cabecera = NULL;
     L->final = NULL;
 }
@@ -272,36 +273,6 @@ int cambiarDirectorio(int nArgs, char** lArgs){
     return aux;
 }
 
-
-void crearPrimero(int pipe[2], tline* line){
-    
-    close(pipe[1]);
-    dup2(pipe[1],STDOUT_FILENO);
-    
-    // comprobación de error
-    if(line->redirect_input){//hay redirección de entrada
-        int aux = open(line->redirect_input, O_RDONLY);
-        dup2(aux,STDIN_FILENO);
-        close(aux);
-    }
-    
-}
-
-void crearUltimo(int pipe[2], tline* line,int* stdoutAux,int* stdinAux){
-    close(pipe[1]); // Nunca utilizaremos el pipe de salida, por lo que lo cerramos
-    
-    if(line->redirect_output) { //hay redirección de salida
-        //pipe[1] = open(line->redirect_output, O_CREAT, O_WRONLY);
-        dup2(pipe[1],open(line->redirect_output, O_CREAT, O_WRONLY));
-        
-    } else { //Escuchar por stdout
-		dup2(*stdoutAux,1);
-        close(*stdoutAux);
-        dup2(*stdinAux,0);
-        close(*stdinAux);
-    }
-}
-
 int esHijo(pid_t pid){
     return pid == 0; //devuelve 1 si es hijo
 }
@@ -323,8 +294,7 @@ int comprobarComando(char* comando){
 
 
 void ejecutarComando(int i, tline* line){
-	int status;
-    char* const* argumentos = line->commands[i].argv;	
+	char* const* argumentos = line->commands[i].argv;	
     execvp(argumentos[0], argumentos);
 	fprintf(stderr,"%s: No se encuentra el mandato\n",argumentos[0]);
     exit(1);
@@ -341,7 +311,11 @@ void redirStdin(char* inp){
             tcsetpgrp(STDIN_FILENO,pidglobal); // devolvemos poderes al padre dado que hemos fracasado
 			exit(1);
 		}else{
-			dup2(dirAux,STDIN_FILENO);
+			if(dup2(dirAux,STDIN_FILENO)==-1){
+				fprintf(stderr,"Error: dup2 %s\n",strerror(errno));
+				tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+				exit(2);
+			}
 			close(dirAux);
 		}
 		
@@ -357,7 +331,11 @@ void redirStdout(char* output){
             tcsetpgrp(STDIN_FILENO,pidglobal); // devolvemos poderes al padre dado que hemos fracasado
 			exit(1);
 		}else{
-			dup2(dirAux,STDOUT_FILENO);
+			if(dup2(dirAux,STDOUT_FILENO)==-1){
+				fprintf(stderr,"Error: dup2 %s\n",strerror(errno));
+				tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+				exit(2);	
+			}
 			close(dirAux);
 		}
 		
@@ -373,58 +351,20 @@ void redirStderr(char* outerror){
             tcsetpgrp(STDIN_FILENO,pidglobal); // devolvemos poderes al padre dado que hemos fracasado
 			exit(1);
 		}else{
-			dup2(dirAux,STDERR_FILENO);
+			if (dup2(dirAux,STDERR_FILENO)==-1){
+				fprintf(stderr,"Error: dup2 %s\n",strerror(errno));
+				tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+				exit(2);	
+			}
 			close(dirAux);
 		}
-		
 	}
 }
-
-//pid_t pidglobal;
-
-void manejador1(int sig){
-	if(sig == SIGCHLD){
-		pid_t pid;
-		pid = wait(NULL);
-		fprintf(stderr,"EEE\n");
-		
-		if (pid != -1){ //Para que no entre el hijo sin hijo
-			
-			elem_t *aux = getElemPID(pid,&ListaPID);
-			terminarElem(aux);
-			fflush(stdout);
-		
-		}
-	}
-	
-}
-
-
-
-static void handler(int sig, siginfo_t *siginfo, void *context){
-	
-	if(sig == SIGCHLD){
-		if (getpid() == pidglobal){ //Para que no entre el hijo sin hijo
-			pid_t pidpadre = siginfo->si_pid;
-			elem_t *aux = getElemPID(pidpadre,&ListaPID);
-//             printf("Me han llamado\n");
-            waitpid(pidpadre,NULL,0);
-			if(aux !=NULL){
-				terminarElem(aux);
-			}
-			return;
-		} else {
-            wait(NULL);
-        }
-	}
-}
-
 
 struct sigaction devolverPoderes;
 pid_t pidh; //PID del hijo que hace exec    
 
-static void estamosEnForeground(int sig, siginfo_t *siginfo, void *context){
-	
+static void estamosEnForeground(int sig, siginfo_t *siginfo, void *context){	
     sigaction(SIGINT,&devolverPoderes,NULL);
     sigaction(SIGQUIT,&devolverPoderes,NULL);
 	if(sig == SIGUSR2){
@@ -436,10 +376,8 @@ static void devolverControl(int sig, siginfo_t *siginfo, void *context){
     printf("\n");
     kill(pidh,SIGTERM);
     tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
-    
-    exit(35);
+    exit(0);
 }
-
 
 static void manejadorDetenido(int sig, siginfo_t *siginfo, void *context){
 	
@@ -450,11 +388,7 @@ static void manejadorDetenido(int sig, siginfo_t *siginfo, void *context){
 			if(aux !=NULL){
 				detenerElem(aux);
             }
-			
 		} 
-// 		else {
-//             wait(NULL);
-//         }
 	}
 }
 
@@ -476,7 +410,7 @@ int escribirPrompt(){
 void esperarHijos(){
     int status;
     pid_t aux = waitpid((pid_t)-1,&status,WNOHANG|WUNTRACED);
-    if(&status != NULL && aux > 0){
+    if(aux > 0){
         //printf("Me ha comentado sus movidas %i\n", aux);
         elem_t* elemAux = getElemPID(aux, &ListaPID);
         if(WIFSTOPPED(status)){
@@ -489,12 +423,6 @@ void esperarHijos(){
     
 }
 
-#define CD "cd"
-#define JOBS "jobs"
-#define FG "fg"
-
-
-
 int main() {
     // Definición de variables
     char buf [1024];
@@ -502,30 +430,25 @@ int main() {
     pid_t pid;
     tline* line;
     int status;
-    int stdoutAux = dup(1); //guardamos stdout actual
     int stdinAux = dup(0);	//guardamos stdin actual
-    int stderrAux = dup(2);
     int **pipes;
     
     pidglobal = getpid();
-    
-    
+        
     struct sigaction marcarDetenido;
     marcarDetenido.sa_sigaction = &manejadorDetenido;
     marcarDetenido.sa_flags = SA_SIGINFO | SA_RESTART;
-    sigaction(SIGUSR1,&marcarDetenido,NULL);
+    sigaction(SIGUSR1,&marcarDetenido,NULL); //No falla porque es una señal que podemos capturar
     
     struct sigaction marcarFg;
     marcarFg.sa_sigaction = &estamosEnForeground;
     marcarFg.sa_flags = SA_SIGINFO | SA_RESTART;
-    sigaction(SIGUSR2,&marcarFg,NULL);
+    sigaction(SIGUSR2,&marcarFg,NULL); //No falla porque es una señal que podemos capturar
     
     crearVacia(&ListaPID);
     
     devolverPoderes.sa_sigaction = &devolverControl;
     devolverPoderes.sa_flags = SA_SIGINFO | SA_RESTART;
-    
-    
     
     signal(SIGINT,SIG_IGN);
 	signal(SIGQUIT,SIG_IGN);
@@ -559,7 +482,7 @@ int main() {
                 switch(ultimonodo->elem.estado){
                     case 1: // en ejecución
                         //Darle control
-                        kill(ultimonodo->elem.pid,SIGUSR2); // indicamos al hijo que ha de aceptar ctrl C
+                        kill(ultimonodo->elem.pid,SIGUSR2); // indicamos al hijo que ha de aceptar ctrl C, no puede fallar
                         tcsetpgrp(STDIN_FILENO,ultimonodo->elem.pid); // pasamos poderes al hijo
                         int status;
                         waitpid(ultimonodo->elem.pid, &status, 0);
@@ -570,15 +493,12 @@ int main() {
                     case 2: // detenido
                         ejecutarElem(&ultimonodo->elem);
                         kill(ultimonodo->elem.pid,SIGCONT); 
-                        printf("enviada señal continua\n");
                         kill(ultimonodo->elem.pid,SIGUSR2); // indicamos al hijo que ha de aceptar ctrl C
-                        printf("enviada señal conecta\n");
                         tcsetpgrp(STDIN_FILENO,ultimonodo->elem.pid);
                         waitpid(ultimonodo->elem.pid, &status, 0);
                         if(WIFEXITED(status)){
                             terminarElem(&ultimonodo->elem);
                         }
-                        puts("me boi");
                         break;
                     case 0: // hecho
                         fprintf(stdout, "msh: fg: El trabajo ha terminado");
@@ -595,7 +515,7 @@ int main() {
                 setpgid(pidglobal,pidglobal);
 				if(!line->background){ // mandato en fg
                     kill(pid,SIGUSR2); // indicarle al hijo que puede actuar ante SIGINT y SIGQUIT
-                    tcsetpgrp(STDIN_FILENO, pid); // pasarle el control al hijo
+                    tcsetpgrp(STDIN_FILENO, pid); // pasarle el control al hijo, no falla
 					waitpid(pid,&status,0); // esperar hijo
 				}else{
 					//Tratar buf
@@ -608,8 +528,8 @@ int main() {
 				continue;
 			}else{ // si es hijo
 				//Redireccionamientos
-				if(setpgid(0, 0) < 0){
-                    perror("setpgid");
+				if(setpgid(getpid(), getpid()) < 0){
+                    fprintf(stderr,"Error: setpgid\n");
                     tcsetpgrp(STDIN_FILENO, pidglobal); // pasarle el control al padreshell
 					exit(1);
                 }
@@ -631,23 +551,42 @@ int main() {
                 waitpid(pid,&status,WUNTRACED);
                 if(WIFSTOPPED(status) != 0){
                     // lanzar señal para que nos marque como detenidos
-                    kill(pid, SIGCONT); // indicar al hijo que ha de continuar
+                    kill(pid, SIGCONT); // indicar al hijo que ha de continuar, no puede fallar por como lo hemos definido
                     waitpid(pid, &status, 0); // ya podemos esperar al hijo
                 }
                 if (WTERMSIG(status)==SIGINT || WTERMSIG(status)==SIGQUIT){
                     printf("\n");	
 				}
 				if(!line->background || fg){
-                    dup2(stdinAux,STDIN_FILENO);
+					if (dup2(stdinAux,STDIN_FILENO)==-1){
+                    	fprintf(stderr,"Error: dup2 %s\n",strerror(errno));
+						tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+						exit(2);
+					}
                     tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
                 }
 				exit(status); //devolvemos el status de su hijo
             }
         } else {
             pipes = malloc((line->ncommands - 1)*sizeof(int*));//inicializamos n-1 pipes
+            if(pipes == NULL){
+				fprintf(stderr, "Error: malloc\n");
+				tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+                exit(2);
+			}
             for(i = 0; i < line->ncommands - 1; i++){
                 pipes[i] = malloc(2*sizeof(int)); // para cada pipe inicializamos dos enteros
-                pipe(pipes[i]); // para cada pipe inicializamos sus descriptores
+                if(pipes[i] == NULL){
+					fprintf(stderr, "Error: malloc\n");
+					tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+					exit(2);
+				}
+                if(pipe(pipes[i])==-1){// para cada pipe inicializamos sus descriptores
+						fprintf(stderr,"Error: pipe %s\n",strerror(errno));
+						tcsetpgrp(STDIN_FILENO,pidglobal); // devolver control del terminal al padre
+						exit(2);
+				} 
+                
             }
             for (i = 0; i < line->ncommands; i++) { // Ejecución de la línea
                 pid = fork();
@@ -694,25 +633,8 @@ int main() {
                 free(pipes[i]); // para cada pipe inicializamos dos enteros
             }
             free(pipes);
-            fprintf(stderr,"HAAGO FREE\n");
         }
-        exit(0);
- 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-    }
-    
-    
-    
+        exit(status);
+    }    
     return 0;
 }
