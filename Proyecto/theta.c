@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include "parser.h"
@@ -36,13 +35,6 @@ void asignar(elem_t* elem1, elem_t* elem2){
     elem1->indice = elem2->indice;
 }
 
-int igual(elem_t* elem1, elem_t* elem2){
-    if(elem1->pid == elem2->pid){
-        return 0;
-    } else {
-        return 1;
-    }
-}
 
 void mostrarElem(elem_t* elem){
 	fprintf(stdout,"%s",elem->buf);
@@ -287,15 +279,6 @@ void errorFork(pid_t pid){
         exit(1);
     }
 }
-
-int comprobarComando(char* comando){
-    int esCd, esFg, esJobs;
-    esCd = strcmp(comando, "cd");
-    esFg = strcmp(comando, "fg");
-    esJobs = strcmp(comando, "jobs");
-    return esCd || esFg || esJobs;
-}
-
 
 void ejecutarComando(int i, tline* line){
 	char* const* argumentos = line->commands[i].argv;	
